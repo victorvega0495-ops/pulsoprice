@@ -28,6 +28,7 @@ export type Database = {
           pospuesta_hasta: string | null
           prioridad: string
           razon_escalamiento: string | null
+          regla_id: string | null
           resultado: string | null
           reto_id: string
           socia_reto_id: string
@@ -49,6 +50,7 @@ export type Database = {
           pospuesta_hasta?: string | null
           prioridad?: string
           razon_escalamiento?: string | null
+          regla_id?: string | null
           resultado?: string | null
           reto_id: string
           socia_reto_id: string
@@ -70,6 +72,7 @@ export type Database = {
           pospuesta_hasta?: string | null
           prioridad?: string
           razon_escalamiento?: string | null
+          regla_id?: string | null
           resultado?: string | null
           reto_id?: string
           socia_reto_id?: string
@@ -79,6 +82,13 @@ export type Database = {
           veces_pospuesta?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "acciones_operativas_regla_id_fkey"
+            columns: ["regla_id"]
+            isOneToOne: false
+            referencedRelation: "reglas_metodo"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "acciones_operativas_reto_id_fkey"
             columns: ["reto_id"]
@@ -267,6 +277,86 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "metas_diarias_reto_reto_id_fkey"
+            columns: ["reto_id"]
+            isOneToOne: false
+            referencedRelation: "retos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reglas_metodo: {
+        Row: {
+          accion_mensaje: string
+          accion_tipo: string
+          activa: boolean
+          asignar_a_rol: string
+          campo: string
+          campo2: string | null
+          condicion_extra: boolean
+          created_at: string
+          id: string
+          logica_extra: string | null
+          nombre: string
+          operador: string
+          operador2: string | null
+          orden: number
+          prioridad: string
+          reto_id: string
+          semanas_activas: number[]
+          tactica_sugerida: string | null
+          updated_at: string
+          valor: string
+          valor2: string | null
+        }
+        Insert: {
+          accion_mensaje?: string
+          accion_tipo?: string
+          activa?: boolean
+          asignar_a_rol?: string
+          campo: string
+          campo2?: string | null
+          condicion_extra?: boolean
+          created_at?: string
+          id?: string
+          logica_extra?: string | null
+          nombre: string
+          operador?: string
+          operador2?: string | null
+          orden?: number
+          prioridad?: string
+          reto_id: string
+          semanas_activas?: number[]
+          tactica_sugerida?: string | null
+          updated_at?: string
+          valor: string
+          valor2?: string | null
+        }
+        Update: {
+          accion_mensaje?: string
+          accion_tipo?: string
+          activa?: boolean
+          asignar_a_rol?: string
+          campo?: string
+          campo2?: string | null
+          condicion_extra?: boolean
+          created_at?: string
+          id?: string
+          logica_extra?: string | null
+          nombre?: string
+          operador?: string
+          operador2?: string | null
+          orden?: number
+          prioridad?: string
+          reto_id?: string
+          semanas_activas?: number[]
+          tactica_sugerida?: string | null
+          updated_at?: string
+          valor?: string
+          valor2?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reglas_metodo_reto_id_fkey"
             columns: ["reto_id"]
             isOneToOne: false
             referencedRelation: "retos"
