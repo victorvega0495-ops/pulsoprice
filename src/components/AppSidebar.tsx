@@ -30,12 +30,14 @@ function getNavItems(rol: string, modoOperativo: string[]): NavItem[] {
     case "director":
       return [
         { title: "Dashboard Ejecutivo", url: "/dashboard", icon: LayoutDashboard },
+        { title: "Cola de Trabajo", url: "/cola-trabajo", icon: ListTodo },
         { title: "Retos", url: "/retos", icon: Trophy },
         { title: "Equipo", url: "/equipo", icon: Users },
       ];
     case "gerente":
       return [
         { title: "Dashboard Operativo", url: "/dashboard-operativo", icon: LayoutDashboard },
+        { title: "Cola de Trabajo", url: "/cola-trabajo", icon: ListTodo },
         { title: "Reto Activo", url: "/reto-activo", icon: Zap },
         { title: "Pipeline Seguimiento", url: "/pipeline", icon: GitBranch },
         { title: "Reglas del Método", url: "/reglas", icon: BookOpen },
