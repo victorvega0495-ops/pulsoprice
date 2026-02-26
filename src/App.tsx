@@ -2,11 +2,50 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Index from "./pages/Index";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { AppLayout } from "@/components/AppLayout";
+import Login from "./pages/Login";
+import Setup from "./pages/Setup";
+import Placeholder from "./pages/Placeholder";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
+
+function DefaultRedirect() {
+  const { profile, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (!profile) return <Navigate to="/login" replace />;
+
+  const redirectMap: Record<string, string> = {
+    director: "/dashboard",
+    gerente: "/dashboard-operativo",
+    operador: "/cola-trabajo",
+    call_center: "/llamadas",
+    mentora: "/pendientes",
+  };
+
+  return <Navigate to={redirectMap[profile.rol] || "/dashboard"} replace />;
+}
+
+function LayoutRoute() {
+  return (
+    <ProtectedRoute>
+      <AppLayout>
+        <Placeholder />
+      </AppLayout>
+    </ProtectedRoute>
+  );
+}
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -14,11 +53,28 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <AuthProvider>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/setup" element={<Setup />} />
+            <Route path="/" element={<ProtectedRoute><DefaultRedirect /></ProtectedRoute>} />
+            {/* All app routes use the same layout + placeholder */}
+            <Route path="/dashboard" element={<LayoutRoute />} />
+            <Route path="/retos" element={<LayoutRoute />} />
+            <Route path="/equipo" element={<LayoutRoute />} />
+            <Route path="/dashboard-operativo" element={<LayoutRoute />} />
+            <Route path="/reto-activo" element={<LayoutRoute />} />
+            <Route path="/pipeline" element={<LayoutRoute />} />
+            <Route path="/reglas" element={<LayoutRoute />} />
+            <Route path="/centro-ia" element={<LayoutRoute />} />
+            <Route path="/cola-trabajo" element={<LayoutRoute />} />
+            <Route path="/mi-reto" element={<LayoutRoute />} />
+            <Route path="/mi-pipeline" element={<LayoutRoute />} />
+            <Route path="/llamadas" element={<LayoutRoute />} />
+            <Route path="/pendientes" element={<LayoutRoute />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
