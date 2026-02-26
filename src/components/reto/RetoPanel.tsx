@@ -233,13 +233,15 @@ export function RetoPanel({ reto, onRefresh }: Props) {
         const nuevoEstado = delta > 0 ? "activa" : (socia.dias_sin_compra >= 3 ? "inactiva" : (socia.dias_sin_compra >= 1 ? "en_riesgo" : socia.estado));
         const graduacion = pctAvanceSocia >= 100 ? "G1" : (pctAvanceSocia >= 70 ? "G2" : "G3");
 
-        await supabase.from("socias_reto").update({
+        const { error: updateErr } = await supabase.from("socias_reto").update({
           venta_acumulada: ventaAcum,
+          venta_semanal: delta,
           pct_avance: Math.round(pctAvanceSocia * 100) / 100,
           dias_sin_compra: delta > 0 ? 0 : socia.dias_sin_compra + 1,
           estado: nuevoEstado as any,
           graduacion_probable: graduacion as any,
         }).eq("id", socia.id);
+        if (updateErr) console.error('[DEBUG] Error updating socia_reto:', socia.id, updateErr);
 
         processed++;
         setUploadProgress(p => ({ ...p, current: p.current + 1 }));
@@ -264,9 +266,42 @@ export function RetoPanel({ reto, onRefresh }: Props) {
         await supabase.from("metas_diarias_reto").update({
           venta_real: realTotal,
         }).eq("id", metaHoyData.id);
-        console.log(`Venta real actualizada para ${fechaHoy}: $${realTotal}`);
+        console.log(`[DEBUG] Venta real actualizada para ${fechaHoy}: $${realTotal}`);
       } else {
-        console.log(`No se encontró meta_diaria para fecha ${fechaHoy} en reto ${reto.id}`);
+        // CREATE the meta_diaria record for this date
+        const diaNum = Math.max(1, differenceInDays(parseISO(fechaHoy), inicio) + 1);
+        const sem = Math.min(4, Math.ceil(diaNum / 7));
+        const pesosArr = Array.isArray(reto.pesos_semanales) ? reto.pesos_semanales : [15, 25, 30, 30];
+        const metaGlobal = socias.reduce((s: number, sc: any) => s + Number(sc.meta_individual || 0), 0);
+        // Accumulated meta up to this day
+        const diasPorSemana = 7;
+        let metaAcum = 0;
+        for (let s = 1; s <= sem; s++) {
+          const peso = Number(pesosArr[s - 1] || 25) / 100;
+          const metaSemana = metaGlobal * peso;
+          if (s < sem) {
+            metaAcum += metaSemana;
+          } else {
+            const diaEnSemana = ((diaNum - 1) % diasPorSemana) + 1;
+            metaAcum += metaSemana * (diaEnSemana / diasPorSemana);
+          }
+        }
+        const pctMeta = metaGlobal > 0 ? (metaAcum / metaGlobal) * 100 : 0;
+
+        const { error: insertMetaErr } = await supabase.from("metas_diarias_reto").insert({
+          reto_id: reto.id,
+          fecha: fechaHoy,
+          dia_numero: diaNum,
+          semana: sem,
+          meta_acumulada_valor: Math.round(metaAcum),
+          meta_acumulada_pct: Math.round(pctMeta * 100) / 100,
+          venta_real: realTotal,
+        });
+        if (insertMetaErr) {
+          console.error('[DEBUG] Error inserting meta_diaria:', insertMetaErr);
+        } else {
+          console.log(`[DEBUG] Meta diaria CREADA para ${fechaHoy}: meta=$${Math.round(metaAcum)}, real=$${realTotal}`);
+        }
       }
 
       await supabase.from("cargas_ventas").update({
@@ -275,12 +310,15 @@ export function RetoPanel({ reto, onRefresh }: Props) {
 
       // === RULES ENGINE ===
       let accionesGeneradas = 0;
+      let reglasEvaluadas = 0;
       try {
-        const { data: reglasActivas } = await supabase
+        const { data: reglasActivas, error: reglasErr } = await supabase
           .from("reglas_metodo")
           .select("*")
           .eq("reto_id", reto.id)
           .eq("activa", true);
+
+        console.log(`[MOTOR] Reglas activas encontradas: ${reglasActivas?.length || 0}`, reglasErr || '');
 
         if (reglasActivas && reglasActivas.length > 0) {
           // Re-fetch updated socias
@@ -290,12 +328,19 @@ export function RetoPanel({ reto, onRefresh }: Props) {
             .eq("reto_id", reto.id);
 
           const semUpload = getSemana(fechaHoy);
+          console.log(`[MOTOR] Semana actual del reto: ${semUpload}`);
 
           for (const regla of reglasActivas) {
-            if (!regla.semanas_activas?.includes(semUpload)) continue;
+            if (!regla.semanas_activas?.includes(semUpload)) {
+              console.log(`[MOTOR] Regla "${regla.nombre}" omitida - no activa en semana ${semUpload} (activa en: ${regla.semanas_activas})`);
+              continue;
+            }
+            reglasEvaluadas++;
+            let matchCount = 0;
 
             for (const socia of (sociasActualizadas || [])) {
               if (!evaluateCondition(regla, socia)) continue;
+              matchCount++;
 
               // Check duplicate
               const { data: existing } = await supabase
@@ -305,24 +350,28 @@ export function RetoPanel({ reto, onRefresh }: Props) {
                 .eq("socia_reto_id", socia.id)
                 .in("estado", ["pendiente", "en_progreso"])
                 .limit(1);
-              if (existing && existing.length > 0) continue;
-
-              // Determine assignee
-              let asignadaA = socia.operador_id || user.id;
-              if (regla.asignar_a_rol === "mentora" && socia.mentora_id) {
-                // For mentora, we still assign to operador_id as the action owner
-                asignadaA = socia.operador_id || user.id;
-              } else if (regla.asignar_a_rol === "gerente") {
-                asignadaA = user.id;
+              if (existing && existing.length > 0) {
+                console.log(`[MOTOR] Duplicado existente para regla "${regla.nombre}" + socia "${socia.nombre}"`);
+                continue;
               }
+
+              // Determine assignee - MUST be a valid UUID, fallback to current user
+              let asignadaA = user.id; // safe default: auth user id
+              if (regla.asignar_a_rol === "operador" && socia.operador_id) {
+                asignadaA = socia.operador_id;
+              } else if (regla.asignar_a_rol === "mentora" && socia.mentora_id) {
+                asignadaA = socia.mentora_id;
+              }
+              // gerente / call_center / fallback → user.id (the person uploading)
 
               const mensaje = (regla.accion_mensaje || "")
                 .replace(/\{nombre\}/g, socia.nombre)
                 .replace(/\{dias_sin_compra\}/g, String(socia.dias_sin_compra))
                 .replace(/\{pct_avance\}/g, String(Number(socia.pct_avance).toFixed(1)))
-                .replace(/\{venta_semanal\}/g, String(Number(socia.venta_semanal).toLocaleString()));
+                .replace(/\{venta_semanal\}/g, String(Number(socia.venta_semanal).toLocaleString()))
+                .replace(/\{venta_acumulada\}/g, String(Number(socia.venta_acumulada).toLocaleString()));
 
-              await supabase.from("acciones_operativas").insert({
+              const { error: insertErr } = await supabase.from("acciones_operativas").insert({
                 reto_id: reto.id,
                 socia_reto_id: socia.id,
                 asignada_a: asignadaA,
@@ -334,16 +383,22 @@ export function RetoPanel({ reto, onRefresh }: Props) {
                 estado: "pendiente",
                 regla_id: regla.id,
               });
-              accionesGeneradas++;
+              if (insertErr) {
+                console.error(`[MOTOR] Error insertando acción para "${regla.nombre}" + "${socia.nombre}":`, insertErr);
+              } else {
+                accionesGeneradas++;
+              }
             }
+            console.log(`[MOTOR] Regla "${regla.nombre}": ${matchCount} socias coinciden`);
           }
         }
       } catch (engineErr) {
-        console.error("Error en motor de reglas:", engineErr);
+        console.error("[MOTOR] Error general en motor de reglas:", engineErr);
       }
+      console.log(`[MOTOR] Resumen: ${accionesGeneradas} acciones generadas de ${reglasEvaluadas} reglas evaluadas`);
 
       const desc = `${processed} socias procesadas · Venta del día: $${ventaTotalDia.toLocaleString()} · ${alertas} alertas` +
-        (accionesGeneradas > 0 ? ` · Motor de reglas: ${accionesGeneradas} acciones generadas` : "");
+        ` · Motor de reglas: ${accionesGeneradas} acciones de ${reglasEvaluadas} reglas`;
 
       toast({
         title: "Ventas cargadas",
