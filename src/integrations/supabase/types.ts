@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      mentoras: {
+        Row: {
+          activa: boolean
+          auth_id: string | null
+          created_at: string
+          id: string
+          id_socia: string | null
+          nombre: string
+          pin_acceso: string
+          telefono: string
+          updated_at: string
+        }
+        Insert: {
+          activa?: boolean
+          auth_id?: string | null
+          created_at?: string
+          id?: string
+          id_socia?: string | null
+          nombre: string
+          pin_acceso: string
+          telefono: string
+          updated_at?: string
+        }
+        Update: {
+          activa?: boolean
+          auth_id?: string | null
+          created_at?: string
+          id?: string
+          id_socia?: string | null
+          nombre?: string
+          pin_acceso?: string
+          telefono?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       usuarios: {
         Row: {
           activo: boolean
@@ -24,6 +60,7 @@ export type Database = {
           modo_operativo: string[] | null
           nombre: string
           rol: Database["public"]["Enums"]["user_role"]
+          telefono: string | null
           updated_at: string
         }
         Insert: {
@@ -35,6 +72,7 @@ export type Database = {
           modo_operativo?: string[] | null
           nombre: string
           rol?: Database["public"]["Enums"]["user_role"]
+          telefono?: string | null
           updated_at?: string
         }
         Update: {
@@ -46,6 +84,7 @@ export type Database = {
           modo_operativo?: string[] | null
           nombre?: string
           rol?: Database["public"]["Enums"]["user_role"]
+          telefono?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -55,7 +94,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      is_director_or_gerente: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
       user_role: "director" | "gerente" | "operador" | "call_center" | "mentora"

@@ -39,6 +39,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .single();
 
     if (data && !error) {
+      if (!data.activo) {
+        // Inactive user - sign them out
+        await supabase.auth.signOut();
+        setProfile(null);
+        return;
+      }
       setProfile({
         id: data.id,
         auth_id: data.auth_id,
