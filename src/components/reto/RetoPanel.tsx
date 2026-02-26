@@ -31,6 +31,41 @@ interface Props {
   onRefresh: () => void;
 }
 
+function evaluateCondition(regla: any, socia: any): boolean {
+  const evalSingle = (campo: string, op: string, valor: string): boolean => {
+    let actual: any;
+    switch (campo) {
+      case "dias_sin_compra": actual = Number(socia.dias_sin_compra); break;
+      case "pct_avance": actual = Number(socia.pct_avance); break;
+      case "venta_acumulada": actual = Number(socia.venta_acumulada); break;
+      case "venta_semanal": actual = Number(socia.venta_semanal); break;
+      case "estado": actual = socia.estado; break;
+      case "g_probable": actual = socia.graduacion_probable; break;
+      case "primera_compra":
+        // primera_compra = true means venta_acumulada > 0 and equals today's delta (approximation)
+        return valor === "true" ? Number(socia.venta_acumulada) > 0 && Number(socia.venta_acumulada) === Number(socia.venta_semanal) : false;
+      case "crediprice_activo":
+        return valor === "true" ? socia.crediprice_activo === true : socia.crediprice_activo === false;
+      default: return false;
+    }
+    const numVal = Number(valor);
+    const isNum = !isNaN(numVal) && !isNaN(actual);
+    switch (op) {
+      case ">=": return isNum ? actual >= numVal : false;
+      case "<=": return isNum ? actual <= numVal : false;
+      case ">": return isNum ? actual > numVal : false;
+      case "<": return isNum ? actual < numVal : false;
+      case "=": return isNum ? actual === numVal : String(actual) === valor;
+      default: return false;
+    }
+  };
+
+  const result1 = evalSingle(regla.campo, regla.operador, regla.valor);
+  if (!regla.condicion_extra || !regla.campo2) return result1;
+  const result2 = evalSingle(regla.campo2, regla.operador2, regla.valor2);
+  return regla.logica_extra === "OR" ? result1 || result2 : result1 && result2;
+}
+
 export function RetoPanel({ reto, onRefresh }: Props) {
   const { profile, user } = useAuth();
   const queryClient = useQueryClient();
@@ -102,7 +137,14 @@ export function RetoPanel({ reto, onRefresh }: Props) {
   const diasRestantes = Math.max(0, differenceInDays(fin, today));
   const totalDias = differenceInDays(fin, inicio) + 1;
   const diaActual = Math.min(differenceInDays(today, inicio) + 1, totalDias);
-  const semanaActual = Math.min(Math.ceil((diaActual / totalDias) * 4), 4);
+  const semanaActual = Math.min(Math.ceil(diaActual / 7), 4);
+
+  // Compute semana from arbitrary date
+  const getSemana = (fechaStr: string) => {
+    const d = parseISO(fechaStr);
+    const dia = Math.min(differenceInDays(d, inicio) + 1, totalDias);
+    return Math.min(Math.ceil(dia / 7), 4);
+  };
 
   // Filter socias
   const filtered = socias.filter((s: any) => {
@@ -231,9 +273,81 @@ export function RetoPanel({ reto, onRefresh }: Props) {
         venta_total_dia: ventaTotalDia, alertas, total_socias: processed,
       }).eq("id", carga.id);
 
+      // === RULES ENGINE ===
+      let accionesGeneradas = 0;
+      try {
+        const { data: reglasActivas } = await supabase
+          .from("reglas_metodo")
+          .select("*")
+          .eq("reto_id", reto.id)
+          .eq("activa", true);
+
+        if (reglasActivas && reglasActivas.length > 0) {
+          // Re-fetch updated socias
+          const { data: sociasActualizadas } = await supabase
+            .from("socias_reto")
+            .select("*")
+            .eq("reto_id", reto.id);
+
+          const semUpload = getSemana(fechaHoy);
+
+          for (const regla of reglasActivas) {
+            if (!regla.semanas_activas?.includes(semUpload)) continue;
+
+            for (const socia of (sociasActualizadas || [])) {
+              if (!evaluateCondition(regla, socia)) continue;
+
+              // Check duplicate
+              const { data: existing } = await supabase
+                .from("acciones_operativas")
+                .select("id")
+                .eq("regla_id", regla.id)
+                .eq("socia_reto_id", socia.id)
+                .in("estado", ["pendiente", "en_progreso"])
+                .limit(1);
+              if (existing && existing.length > 0) continue;
+
+              // Determine assignee
+              let asignadaA = socia.operador_id || user.id;
+              if (regla.asignar_a_rol === "mentora" && socia.mentora_id) {
+                // For mentora, we still assign to operador_id as the action owner
+                asignadaA = socia.operador_id || user.id;
+              } else if (regla.asignar_a_rol === "gerente") {
+                asignadaA = user.id;
+              }
+
+              const mensaje = (regla.accion_mensaje || "")
+                .replace(/\{nombre\}/g, socia.nombre)
+                .replace(/\{dias_sin_compra\}/g, String(socia.dias_sin_compra))
+                .replace(/\{pct_avance\}/g, String(Number(socia.pct_avance).toFixed(1)))
+                .replace(/\{venta_semanal\}/g, String(Number(socia.venta_semanal).toLocaleString()));
+
+              await supabase.from("acciones_operativas").insert({
+                reto_id: reto.id,
+                socia_reto_id: socia.id,
+                asignada_a: asignadaA,
+                tipo: regla.accion_tipo,
+                titulo: regla.nombre,
+                contexto: mensaje,
+                origen: "metodo",
+                prioridad: regla.prioridad,
+                estado: "pendiente",
+                regla_id: regla.id,
+              });
+              accionesGeneradas++;
+            }
+          }
+        }
+      } catch (engineErr) {
+        console.error("Error en motor de reglas:", engineErr);
+      }
+
+      const desc = `${processed} socias procesadas · Venta del día: $${ventaTotalDia.toLocaleString()} · ${alertas} alertas` +
+        (accionesGeneradas > 0 ? ` · Motor de reglas: ${accionesGeneradas} acciones generadas` : "");
+
       toast({
         title: "Ventas cargadas",
-        description: `${processed} socias procesadas · Venta del día: $${ventaTotalDia.toLocaleString()} · ${alertas} alertas`,
+        description: desc,
       });
 
       invalidateAll();
