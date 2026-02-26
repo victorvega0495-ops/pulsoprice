@@ -368,28 +368,6 @@ export function RetoPanel({ reto, onRefresh }: Props) {
         </div>
       )}
 
-      {/* DEBUG: metas_diarias_reto raw data */}
-      {metasDiarias.length > 0 && (
-        <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-4">
-          <h4 className="text-xs font-semibold text-yellow-400 mb-2">🔍 DEBUG — metas_diarias_reto (primeros 5)</h4>
-          <div className="text-xs font-mono space-y-1">
-            {metasDiarias.slice(0, 5).map((m: any, i: number) => (
-              <div key={i} className="flex gap-4">
-                <span className="text-muted-foreground">D{m.dia_numero}</span>
-                <span>fecha: {m.fecha}</span>
-                <span>meta: ${Number(m.meta_acumulada_valor).toLocaleString()}</span>
-                <span className={Number(m.venta_real) > 0 ? "text-emerald-400 font-bold" : "text-red-400"}>
-                  venta_real: ${Number(m.venta_real).toLocaleString()}
-                </span>
-              </div>
-            ))}
-          </div>
-          <p className="text-[10px] text-muted-foreground mt-2">
-            Si venta_real es $0 para todos los días después de subir Excel, el problema está en la carga. 
-            Verifica que la fecha del Excel coincida con alguna de estas fechas (ej: {metasDiarias[0]?.fecha}).
-          </p>
-        </div>
-      )}
       {/* Upload ventas + historial */}
       {isManager && (
         <div className="space-y-4">

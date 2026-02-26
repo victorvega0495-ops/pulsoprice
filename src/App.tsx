@@ -13,6 +13,8 @@ import Equipo from "./pages/Equipo";
 import RetoActivo from "./pages/RetoActivo";
 import ColaTrabajo from "./pages/ColaTrabajo";
 import PipelineSeguimiento from "./pages/PipelineSeguimiento";
+import DashboardOperativo from "./pages/DashboardOperativo";
+import DashboardEjecutivo from "./pages/DashboardEjecutivo";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -63,10 +65,10 @@ const App = () => (
             <Route path="/setup" element={<Setup />} />
             <Route path="/" element={<ProtectedRoute><DefaultRedirect /></ProtectedRoute>} />
             {/* All app routes use the same layout + placeholder */}
-            <Route path="/dashboard" element={<LayoutRoute />} />
+            <Route path="/dashboard" element={<ProtectedRoute><AppLayout><DashboardEjecutivo /></AppLayout></ProtectedRoute>} />
             <Route path="/retos" element={<LayoutRoute />} />
             <Route path="/equipo" element={<ProtectedRoute><AppLayout><Equipo /></AppLayout></ProtectedRoute>} />
-            <Route path="/dashboard-operativo" element={<LayoutRoute />} />
+            <Route path="/dashboard-operativo" element={<ProtectedRoute><AppLayout><DashboardOperativo /></AppLayout></ProtectedRoute>} />
             <Route path="/reto-activo" element={<ProtectedRoute><AppLayout><RetoActivo /></AppLayout></ProtectedRoute>} />
             <Route path="/pipeline" element={<ProtectedRoute><AppLayout><PipelineSeguimiento /></AppLayout></ProtectedRoute>} />
             <Route path="/reglas" element={<LayoutRoute />} />
