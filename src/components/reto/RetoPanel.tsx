@@ -25,7 +25,7 @@ import {
 import { Upload, TrendingUp, Users, Target, AlertTriangle, Search, Loader2, Undo2, Clock } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
-
+import { SociaFicha } from "@/components/reto/SociaFicha";
 interface Props {
   reto: any;
   onRefresh: () => void;
@@ -39,7 +39,7 @@ export function RetoPanel({ reto, onRefresh }: Props) {
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
   const [filterEstado, setFilterEstado] = useState("todos");
   const [searchText, setSearchText] = useState("");
-  const [selectedSocia, setSelectedSocia] = useState<any>(null);
+  const [selectedSocia, setSelectedSocia] = useState<string | null>(null);
   const [revertCarga, setRevertCarga] = useState<any>(null);
 
   const isManager = profile?.rol === "director" || profile?.rol === "gerente";
@@ -189,12 +189,28 @@ export function RetoPanel({ reto, onRefresh }: Props) {
         setUploadProgress(p => ({ ...p, current: p.current + 1 }));
       }
 
-      // Update meta diaria with real sales
-      const metaHoy = metasDiarias.find((m: any) => m.fecha === fechaHoy);
-      if (metaHoy) {
+      // Update meta diaria with real sales — query actual total for the date (handles multiple uploads same day)
+      const { data: allDeltasForDate } = await supabase
+        .from("ventas_diarias")
+        .select("delta_diario")
+        .eq("reto_id", reto.id)
+        .eq("fecha", fechaHoy);
+      const realTotal = (allDeltasForDate || []).reduce((s: number, v: any) => s + Number(v.delta_diario), 0);
+
+      const { data: metaHoyData } = await supabase
+        .from("metas_diarias_reto")
+        .select("id")
+        .eq("reto_id", reto.id)
+        .eq("fecha", fechaHoy)
+        .maybeSingle();
+
+      if (metaHoyData) {
         await supabase.from("metas_diarias_reto").update({
-          venta_real: ventaTotalDia,
-        }).eq("id", metaHoy.id);
+          venta_real: realTotal,
+        }).eq("id", metaHoyData.id);
+        console.log(`Venta real actualizada para ${fechaHoy}: $${realTotal}`);
+      } else {
+        console.log(`No se encontró meta_diaria para fecha ${fechaHoy} en reto ${reto.id}`);
       }
 
       await supabase.from("cargas_ventas").update({
@@ -463,7 +479,7 @@ export function RetoPanel({ reto, onRefresh }: Props) {
                 </TableRow>
               ) : (
                 filtered.map((s: any) => (
-                  <TableRow key={s.id} className="cursor-pointer" onClick={() => setSelectedSocia(s)}>
+                  <TableRow key={s.id} className="cursor-pointer" onClick={() => setSelectedSocia(s.id)}>
                     <TableCell className="font-medium">{s.nombre}</TableCell>
                     <TableCell className="text-muted-foreground">{s.tienda_visita || "—"}</TableCell>
                     <TableCell className="text-right">${Number(s.baseline_mensual).toLocaleString()}</TableCell>
@@ -494,29 +510,13 @@ export function RetoPanel({ reto, onRefresh }: Props) {
         <p className="text-xs text-muted-foreground">{filtered.length} de {totalSocias} socias</p>
       </div>
 
-      {/* Socia detail modal */}
-      <Dialog open={!!selectedSocia} onOpenChange={(o) => !o && setSelectedSocia(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{selectedSocia?.nombre}</DialogTitle>
-            <DialogDescription>Ficha de socia</DialogDescription>
-          </DialogHeader>
-          {selectedSocia && (
-            <div className="space-y-3 text-sm">
-              <Detail label="ID Socia" value={selectedSocia.id_socia} />
-              <Detail label="Teléfono" value={selectedSocia.telefono || "—"} />
-              <Detail label="Tienda" value={selectedSocia.tienda_visita || "—"} />
-              <Detail label="Baseline" value={`$${Number(selectedSocia.baseline_mensual).toLocaleString()}`} />
-              <Detail label="Meta Individual" value={`$${Number(selectedSocia.meta_individual).toLocaleString()}`} />
-              <Detail label="Venta Acumulada" value={`$${Number(selectedSocia.venta_acumulada).toLocaleString()}`} />
-              <Detail label="% Avance" value={`${Number(selectedSocia.pct_avance).toFixed(1)}%`} />
-              <Detail label="Días sin compra" value={String(selectedSocia.dias_sin_compra)} />
-              <Detail label="Estado" value={selectedSocia.estado} />
-              <Detail label="Graduación Probable" value={selectedSocia.graduacion_probable || "—"} />
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* Socia ficha drawer */}
+      <SociaFicha
+        sociaId={selectedSocia}
+        retoId={reto.id}
+        open={!!selectedSocia}
+        onClose={() => setSelectedSocia(null)}
+      />
     </div>
   );
 }
@@ -533,11 +533,3 @@ function KpiCard({ icon, label, value }: { icon: React.ReactNode; label: string;
   );
 }
 
-function Detail({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="font-medium">{value}</span>
-    </div>
-  );
-}
