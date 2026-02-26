@@ -9,6 +9,7 @@ import { AppLayout } from "@/components/AppLayout";
 import Login from "./pages/Login";
 import Setup from "./pages/Setup";
 import Placeholder from "./pages/Placeholder";
+import Equipo from "./pages/Equipo";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -61,7 +62,7 @@ const App = () => (
             {/* All app routes use the same layout + placeholder */}
             <Route path="/dashboard" element={<LayoutRoute />} />
             <Route path="/retos" element={<LayoutRoute />} />
-            <Route path="/equipo" element={<LayoutRoute />} />
+            <Route path="/equipo" element={<ProtectedRoute><AppLayout><Equipo /></AppLayout></ProtectedRoute>} />
             <Route path="/dashboard-operativo" element={<LayoutRoute />} />
             <Route path="/reto-activo" element={<LayoutRoute />} />
             <Route path="/pipeline" element={<LayoutRoute />} />
