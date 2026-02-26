@@ -320,6 +320,8 @@ export type Database = {
         Row: {
           baseline_mensual: number
           created_at: string
+          crediprice_activo: boolean
+          crediprice_monto: number
           dias_sin_compra: number
           estado: Database["public"]["Enums"]["socia_estado"]
           graduacion_probable:
@@ -333,6 +335,11 @@ export type Database = {
           operador_id: string | null
           pct_avance: number
           reto_id: string
+          score_cierre: number
+          score_gestion: number
+          score_presentacion: number
+          score_prospeccion: number
+          score_recurrencia: number
           telefono: string | null
           tienda_visita: string | null
           updated_at: string
@@ -342,6 +349,8 @@ export type Database = {
         Insert: {
           baseline_mensual?: number
           created_at?: string
+          crediprice_activo?: boolean
+          crediprice_monto?: number
           dias_sin_compra?: number
           estado?: Database["public"]["Enums"]["socia_estado"]
           graduacion_probable?:
@@ -355,6 +364,11 @@ export type Database = {
           operador_id?: string | null
           pct_avance?: number
           reto_id: string
+          score_cierre?: number
+          score_gestion?: number
+          score_presentacion?: number
+          score_prospeccion?: number
+          score_recurrencia?: number
           telefono?: string | null
           tienda_visita?: string | null
           updated_at?: string
@@ -364,6 +378,8 @@ export type Database = {
         Update: {
           baseline_mensual?: number
           created_at?: string
+          crediprice_activo?: boolean
+          crediprice_monto?: number
           dias_sin_compra?: number
           estado?: Database["public"]["Enums"]["socia_estado"]
           graduacion_probable?:
@@ -377,6 +393,11 @@ export type Database = {
           operador_id?: string | null
           pct_avance?: number
           reto_id?: string
+          score_cierre?: number
+          score_gestion?: number
+          score_presentacion?: number
+          score_prospeccion?: number
+          score_recurrencia?: number
           telefono?: string | null
           tienda_visita?: string | null
           updated_at?: string

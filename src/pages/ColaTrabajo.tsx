@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { SociaFicha } from "@/components/reto/SociaFicha";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
@@ -71,6 +72,7 @@ export default function ColaTrabajo() {
   const [posponerOpcion, setPosponerOpcion] = useState("");
   const [filterOperador, setFilterOperador] = useState("todos");
   const [generando, setGenerando] = useState(false);
+  const [fichaOpen, setFichaOpen] = useState<string | null>(null);
 
   const isManager = profile?.rol === "director" || profile?.rol === "gerente";
 
@@ -341,7 +343,10 @@ export default function ColaTrabajo() {
                     <span className="text-sm font-semibold">{accion.titulo}</span>
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    {socia?.nombre} · {socia?.tienda_visita || "Sin tienda"}
+                    <button className="hover:underline text-foreground font-medium" onClick={(e) => { e.stopPropagation(); setFichaOpen(accion.socia_reto_id); }}>
+                      {socia?.nombre}
+                    </button>
+                    {" · "}{socia?.tienda_visita || "Sin tienda"}
                   </p>
                   {accion.contexto && (
                     <p className="text-xs text-muted-foreground/70 line-clamp-2">{accion.contexto}</p>
@@ -480,6 +485,14 @@ export default function ColaTrabajo() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Socia Ficha */}
+      <SociaFicha
+        sociaId={fichaOpen}
+        retoId={acciones[0]?.reto_id || ""}
+        open={!!fichaOpen}
+        onClose={() => setFichaOpen(null)}
+      />
     </div>
   );
 }
