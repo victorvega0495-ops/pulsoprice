@@ -18,7 +18,8 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
-import { Upload, TrendingUp, Users, Target, AlertTriangle, Calendar, Search } from "lucide-react";
+import { Upload, TrendingUp, Users, Target, AlertTriangle, Calendar, Search, Loader2 } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 
 interface Props {
@@ -31,6 +32,7 @@ export function RetoPanel({ reto, onRefresh }: Props) {
   const queryClient = useQueryClient();
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
   const [filterEstado, setFilterEstado] = useState("todos");
   const [searchText, setSearchText] = useState("");
   const [selectedSocia, setSelectedSocia] = useState<any>(null);
@@ -137,11 +139,13 @@ export function RetoPanel({ reto, onRefresh }: Props) {
 
       if (cargaErr) throw cargaErr;
 
+      setUploadProgress({ current: 0, total: data.length });
+
       for (const row of data) {
         const idSocia = String(row.id_socia ?? row.ID_SOCIA ?? "").trim();
         const ventaAcum = Number(row.venta_acumulada ?? row.VENTA_ACUMULADA ?? 0);
 
-        if (!idSocia) continue;
+        if (!idSocia) { setUploadProgress(p => ({ ...p, current: p.current + 1 })); continue; }
 
         // Find socia in reto
         const socia = socias.find((s: any) => s.id_socia === idSocia);
@@ -174,13 +178,23 @@ export function RetoPanel({ reto, onRefresh }: Props) {
         }).eq("id", socia.id);
 
         processed++;
+        setUploadProgress(p => ({ ...p, current: p.current + 1 }));
       }
 
-      // Update meta diaria with real sales
+      // Update meta diaria with real sales — sum all socias' deltas for the day
+      // First get total venta_real from all ventas_diarias for this day
+      const { data: ventasDelDia } = await supabase
+        .from("ventas_diarias")
+        .select("delta_diario")
+        .eq("reto_id", reto.id)
+        .eq("fecha", fechaHoy);
+      
+      const ventaRealTotal = (ventasDelDia || []).reduce((sum: number, v: any) => sum + Number(v.delta_diario), 0);
+      
       const metaHoy = metasDiarias.find((m: any) => m.fecha === fechaHoy);
       if (metaHoy) {
         await supabase.from("metas_diarias_reto").update({
-          venta_real: ventaTotalDia,
+          venta_real: ventaRealTotal,
         }).eq("id", metaHoy.id);
       }
 
@@ -262,7 +276,7 @@ export function RetoPanel({ reto, onRefresh }: Props) {
                 labelStyle={{ color: "hsl(210 20% 98%)" }}
               />
               <Bar dataKey="meta" fill="hsl(239 84% 67% / 0.3)" name="Meta" radius={[2, 2, 0, 0]} />
-              <Bar dataKey="real" fill="hsl(239 84% 67%)" name="Real" radius={[2, 2, 0, 0]} />
+              <Bar dataKey="real" fill="hsl(142 71% 45%)" name="Venta Real" radius={[2, 2, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -278,11 +292,22 @@ export function RetoPanel({ reto, onRefresh }: Props) {
             dragOver ? "border-primary bg-primary/5" : "border-border"
           } ${uploading ? "opacity-50 pointer-events-none" : ""}`}
         >
-          <Upload className="mr-3 h-6 w-6 text-muted-foreground" />
-          <div>
-            <p className="text-sm font-medium">{uploading ? "Procesando..." : "Subir Excel de ventas del día"}</p>
-            <p className="text-xs text-muted-foreground">Arrastra el archivo o haz click para seleccionar</p>
-          </div>
+          {uploading ? (
+            <div className="flex flex-col items-center gap-3 w-full max-w-sm">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="text-sm font-medium">Procesando {uploadProgress.total} socias...</p>
+              <Progress value={uploadProgress.total > 0 ? (uploadProgress.current / uploadProgress.total) * 100 : 0} className="w-full" />
+              <p className="text-xs text-muted-foreground">{uploadProgress.current} de {uploadProgress.total} registros</p>
+            </div>
+          ) : (
+            <>
+              <Upload className="mr-3 h-6 w-6 text-muted-foreground" />
+              <div>
+                <p className="text-sm font-medium">Subir Excel de ventas del día</p>
+                <p className="text-xs text-muted-foreground">Arrastra el archivo o haz click para seleccionar</p>
+              </div>
+            </>
+          )}
           <input
             type="file"
             accept=".xlsx,.xls"

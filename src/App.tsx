@@ -11,6 +11,7 @@ import Setup from "./pages/Setup";
 import Placeholder from "./pages/Placeholder";
 import Equipo from "./pages/Equipo";
 import RetoActivo from "./pages/RetoActivo";
+import ColaTrabajo from "./pages/ColaTrabajo";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -69,7 +70,7 @@ const App = () => (
             <Route path="/pipeline" element={<LayoutRoute />} />
             <Route path="/reglas" element={<LayoutRoute />} />
             <Route path="/centro-ia" element={<LayoutRoute />} />
-            <Route path="/cola-trabajo" element={<LayoutRoute />} />
+            <Route path="/cola-trabajo" element={<ProtectedRoute><AppLayout><ColaTrabajo /></AppLayout></ProtectedRoute>} />
             <Route path="/mi-reto" element={<LayoutRoute />} />
             <Route path="/mi-pipeline" element={<LayoutRoute />} />
             <Route path="/llamadas" element={<LayoutRoute />} />

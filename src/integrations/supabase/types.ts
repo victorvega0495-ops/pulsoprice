@@ -14,6 +14,87 @@ export type Database = {
   }
   public: {
     Tables: {
+      acciones_operativas: {
+        Row: {
+          asignada_a: string
+          comentario_resultado: string | null
+          contexto: string | null
+          created_at: string
+          escalada_a: string | null
+          estado: string
+          fecha_completada: string | null
+          id: string
+          origen: string
+          pospuesta_hasta: string | null
+          prioridad: string
+          razon_escalamiento: string | null
+          resultado: string | null
+          reto_id: string
+          socia_reto_id: string
+          tipo: string
+          titulo: string
+          updated_at: string
+          veces_pospuesta: number
+        }
+        Insert: {
+          asignada_a: string
+          comentario_resultado?: string | null
+          contexto?: string | null
+          created_at?: string
+          escalada_a?: string | null
+          estado?: string
+          fecha_completada?: string | null
+          id?: string
+          origen?: string
+          pospuesta_hasta?: string | null
+          prioridad?: string
+          razon_escalamiento?: string | null
+          resultado?: string | null
+          reto_id: string
+          socia_reto_id: string
+          tipo?: string
+          titulo: string
+          updated_at?: string
+          veces_pospuesta?: number
+        }
+        Update: {
+          asignada_a?: string
+          comentario_resultado?: string | null
+          contexto?: string | null
+          created_at?: string
+          escalada_a?: string | null
+          estado?: string
+          fecha_completada?: string | null
+          id?: string
+          origen?: string
+          pospuesta_hasta?: string | null
+          prioridad?: string
+          razon_escalamiento?: string | null
+          resultado?: string | null
+          reto_id?: string
+          socia_reto_id?: string
+          tipo?: string
+          titulo?: string
+          updated_at?: string
+          veces_pospuesta?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "acciones_operativas_reto_id_fkey"
+            columns: ["reto_id"]
+            isOneToOne: false
+            referencedRelation: "retos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "acciones_operativas_socia_reto_id_fkey"
+            columns: ["socia_reto_id"]
+            isOneToOne: false
+            referencedRelation: "socias_reto"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cargas_ventas: {
         Row: {
           alertas: number
@@ -54,6 +135,61 @@ export type Database = {
             columns: ["reto_id"]
             isOneToOne: false
             referencedRelation: "retos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      interacciones: {
+        Row: {
+          accion_id: string | null
+          comentario: string | null
+          created_at: string
+          id: string
+          reto_id: string
+          socia_reto_id: string
+          tipo: string
+          usuario_id: string
+        }
+        Insert: {
+          accion_id?: string | null
+          comentario?: string | null
+          created_at?: string
+          id?: string
+          reto_id: string
+          socia_reto_id: string
+          tipo?: string
+          usuario_id: string
+        }
+        Update: {
+          accion_id?: string | null
+          comentario?: string | null
+          created_at?: string
+          id?: string
+          reto_id?: string
+          socia_reto_id?: string
+          tipo?: string
+          usuario_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "interacciones_accion_id_fkey"
+            columns: ["accion_id"]
+            isOneToOne: false
+            referencedRelation: "acciones_operativas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "interacciones_reto_id_fkey"
+            columns: ["reto_id"]
+            isOneToOne: false
+            referencedRelation: "retos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "interacciones_socia_reto_id_fkey"
+            columns: ["socia_reto_id"]
+            isOneToOne: false
+            referencedRelation: "socias_reto"
             referencedColumns: ["id"]
           },
         ]

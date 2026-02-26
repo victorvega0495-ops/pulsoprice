@@ -66,7 +66,7 @@ export function WizardStep1({ form, setForm }: Props) {
                 selected={form.fecha_fin}
                 onSelect={(d) => setForm({ ...form, fecha_fin: d })}
                 disabled={(date) =>
-                  form.fecha_inicio ? date < addDays(form.fecha_inicio, 28) : false
+                  form.fecha_inicio ? date <= form.fecha_inicio : false
                 }
                 className="p-3 pointer-events-auto"
               />
