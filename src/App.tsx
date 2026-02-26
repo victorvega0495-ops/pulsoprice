@@ -12,6 +12,7 @@ import Placeholder from "./pages/Placeholder";
 import Equipo from "./pages/Equipo";
 import RetoActivo from "./pages/RetoActivo";
 import ColaTrabajo from "./pages/ColaTrabajo";
+import PipelineSeguimiento from "./pages/PipelineSeguimiento";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -67,7 +68,7 @@ const App = () => (
             <Route path="/equipo" element={<ProtectedRoute><AppLayout><Equipo /></AppLayout></ProtectedRoute>} />
             <Route path="/dashboard-operativo" element={<LayoutRoute />} />
             <Route path="/reto-activo" element={<ProtectedRoute><AppLayout><RetoActivo /></AppLayout></ProtectedRoute>} />
-            <Route path="/pipeline" element={<LayoutRoute />} />
+            <Route path="/pipeline" element={<ProtectedRoute><AppLayout><PipelineSeguimiento /></AppLayout></ProtectedRoute>} />
             <Route path="/reglas" element={<LayoutRoute />} />
             <Route path="/centro-ia" element={<LayoutRoute />} />
             <Route path="/cola-trabajo" element={<ProtectedRoute><AppLayout><ColaTrabajo /></AppLayout></ProtectedRoute>} />

@@ -324,6 +324,7 @@ export type Database = {
           crediprice_monto: number
           dias_sin_compra: number
           estado: Database["public"]["Enums"]["socia_estado"]
+          fase_seguimiento: string | null
           graduacion_probable:
             | Database["public"]["Enums"]["graduacion_probable"]
             | null
@@ -333,6 +334,7 @@ export type Database = {
           meta_individual: number
           nombre: string
           operador_id: string | null
+          operador_seguimiento_id: string | null
           pct_avance: number
           reto_id: string
           score_cierre: number
@@ -353,6 +355,7 @@ export type Database = {
           crediprice_monto?: number
           dias_sin_compra?: number
           estado?: Database["public"]["Enums"]["socia_estado"]
+          fase_seguimiento?: string | null
           graduacion_probable?:
             | Database["public"]["Enums"]["graduacion_probable"]
             | null
@@ -362,6 +365,7 @@ export type Database = {
           meta_individual?: number
           nombre: string
           operador_id?: string | null
+          operador_seguimiento_id?: string | null
           pct_avance?: number
           reto_id: string
           score_cierre?: number
@@ -382,6 +386,7 @@ export type Database = {
           crediprice_monto?: number
           dias_sin_compra?: number
           estado?: Database["public"]["Enums"]["socia_estado"]
+          fase_seguimiento?: string | null
           graduacion_probable?:
             | Database["public"]["Enums"]["graduacion_probable"]
             | null
@@ -391,6 +396,7 @@ export type Database = {
           meta_individual?: number
           nombre?: string
           operador_id?: string | null
+          operador_seguimiento_id?: string | null
           pct_avance?: number
           reto_id?: string
           score_cierre?: number
@@ -511,7 +517,12 @@ export type Database = {
     Enums: {
       graduacion_probable: "G1" | "G2" | "G3"
       reto_estado: "borrador" | "publicado" | "cerrado"
-      socia_estado: "inscrita" | "activa" | "en_riesgo" | "inactiva"
+      socia_estado:
+        | "inscrita"
+        | "activa"
+        | "en_riesgo"
+        | "inactiva"
+        | "graduada"
       user_role: "director" | "gerente" | "operador" | "call_center" | "mentora"
     }
     CompositeTypes: {
@@ -642,7 +653,7 @@ export const Constants = {
     Enums: {
       graduacion_probable: ["G1", "G2", "G3"],
       reto_estado: ["borrador", "publicado", "cerrado"],
-      socia_estado: ["inscrita", "activa", "en_riesgo", "inactiva"],
+      socia_estado: ["inscrita", "activa", "en_riesgo", "inactiva", "graduada"],
       user_role: ["director", "gerente", "operador", "call_center", "mentora"],
     },
   },

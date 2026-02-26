@@ -115,7 +115,7 @@ export function RetoPanel({ reto, onRefresh }: Props) {
   const chartData = metasDiarias.slice(0, 35).map((m: any) => ({
     dia: `D${m.dia_numero}`,
     meta: Number(m.meta_acumulada_valor),
-    real: Number(m.venta_real) || undefined,
+    real: Number(m.venta_real) > 0 ? Number(m.venta_real) : undefined,
   }));
 
   const invalidateAll = () => {
@@ -141,7 +141,21 @@ export function RetoPanel({ reto, onRefresh }: Props) {
         reader.readAsBinaryString(file);
       });
 
-      const fechaHoy = format(today, "yyyy-MM-dd");
+      // Determine the fecha: read from Excel rows or use today
+      // Try to get fecha from Excel data (first row)
+      const firstRow = data[0] || {};
+      let fechaExcel = String(firstRow.fecha ?? firstRow.FECHA ?? "").trim();
+      let fechaHoy: string;
+      if (fechaExcel && /^\d{4}-\d{2}-\d{2}$/.test(fechaExcel)) {
+        fechaHoy = fechaExcel;
+      } else if (fechaExcel && /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(fechaExcel)) {
+        // Handle dd/mm/yyyy format
+        const parts = fechaExcel.split("/");
+        fechaHoy = `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
+      } else {
+        fechaHoy = format(today, "yyyy-MM-dd");
+      }
+      console.log(`[DEBUG] Fecha de carga determinada: ${fechaHoy}`);
       let ventaTotalDia = 0;
       let alertas = 0;
       let processed = 0;
@@ -354,6 +368,28 @@ export function RetoPanel({ reto, onRefresh }: Props) {
         </div>
       )}
 
+      {/* DEBUG: metas_diarias_reto raw data */}
+      {metasDiarias.length > 0 && (
+        <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-4">
+          <h4 className="text-xs font-semibold text-yellow-400 mb-2">🔍 DEBUG — metas_diarias_reto (primeros 5)</h4>
+          <div className="text-xs font-mono space-y-1">
+            {metasDiarias.slice(0, 5).map((m: any, i: number) => (
+              <div key={i} className="flex gap-4">
+                <span className="text-muted-foreground">D{m.dia_numero}</span>
+                <span>fecha: {m.fecha}</span>
+                <span>meta: ${Number(m.meta_acumulada_valor).toLocaleString()}</span>
+                <span className={Number(m.venta_real) > 0 ? "text-emerald-400 font-bold" : "text-red-400"}>
+                  venta_real: ${Number(m.venta_real).toLocaleString()}
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-2">
+            Si venta_real es $0 para todos los días después de subir Excel, el problema está en la carga. 
+            Verifica que la fecha del Excel coincida con alguna de estas fechas (ej: {metasDiarias[0]?.fecha}).
+          </p>
+        </div>
+      )}
       {/* Upload ventas + historial */}
       {isManager && (
         <div className="space-y-4">
