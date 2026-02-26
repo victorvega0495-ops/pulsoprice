@@ -14,6 +14,50 @@ export type Database = {
   }
   public: {
     Tables: {
+      cargas_ventas: {
+        Row: {
+          alertas: number
+          archivo_nombre: string
+          cargado_por: string
+          created_at: string
+          fecha: string
+          id: string
+          reto_id: string
+          total_socias: number
+          venta_total_dia: number
+        }
+        Insert: {
+          alertas?: number
+          archivo_nombre: string
+          cargado_por: string
+          created_at?: string
+          fecha: string
+          id?: string
+          reto_id: string
+          total_socias?: number
+          venta_total_dia?: number
+        }
+        Update: {
+          alertas?: number
+          archivo_nombre?: string
+          cargado_por?: string
+          created_at?: string
+          fecha?: string
+          id?: string
+          reto_id?: string
+          total_socias?: number
+          venta_total_dia?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cargas_ventas_reto_id_fkey"
+            columns: ["reto_id"]
+            isOneToOne: false
+            referencedRelation: "retos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mentoras: {
         Row: {
           activa: boolean
@@ -49,6 +93,169 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      metas_diarias_reto: {
+        Row: {
+          created_at: string
+          dia_numero: number
+          fecha: string
+          id: string
+          meta_acumulada_pct: number
+          meta_acumulada_valor: number
+          reto_id: string
+          semana: number
+          venta_real: number
+        }
+        Insert: {
+          created_at?: string
+          dia_numero: number
+          fecha: string
+          id?: string
+          meta_acumulada_pct?: number
+          meta_acumulada_valor?: number
+          reto_id: string
+          semana: number
+          venta_real?: number
+        }
+        Update: {
+          created_at?: string
+          dia_numero?: number
+          fecha?: string
+          id?: string
+          meta_acumulada_pct?: number
+          meta_acumulada_valor?: number
+          reto_id?: string
+          semana?: number
+          venta_real?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "metas_diarias_reto_reto_id_fkey"
+            columns: ["reto_id"]
+            isOneToOne: false
+            referencedRelation: "retos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      retos: {
+        Row: {
+          created_at: string
+          created_by: string
+          estado: Database["public"]["Enums"]["reto_estado"]
+          fecha_fin: string
+          fecha_inicio: string
+          id: string
+          meta_estandar: number
+          nombre: string
+          pesos_semanales: Json
+          tipo_meta: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          estado?: Database["public"]["Enums"]["reto_estado"]
+          fecha_fin: string
+          fecha_inicio: string
+          id?: string
+          meta_estandar?: number
+          nombre: string
+          pesos_semanales?: Json
+          tipo_meta?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          estado?: Database["public"]["Enums"]["reto_estado"]
+          fecha_fin?: string
+          fecha_inicio?: string
+          id?: string
+          meta_estandar?: number
+          nombre?: string
+          pesos_semanales?: Json
+          tipo_meta?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      socias_reto: {
+        Row: {
+          baseline_mensual: number
+          created_at: string
+          dias_sin_compra: number
+          estado: Database["public"]["Enums"]["socia_estado"]
+          graduacion_probable:
+            | Database["public"]["Enums"]["graduacion_probable"]
+            | null
+          id: string
+          id_socia: string
+          mentora_id: string | null
+          meta_individual: number
+          nombre: string
+          operador_id: string | null
+          pct_avance: number
+          reto_id: string
+          telefono: string | null
+          tienda_visita: string | null
+          updated_at: string
+          venta_acumulada: number
+          venta_semanal: number
+        }
+        Insert: {
+          baseline_mensual?: number
+          created_at?: string
+          dias_sin_compra?: number
+          estado?: Database["public"]["Enums"]["socia_estado"]
+          graduacion_probable?:
+            | Database["public"]["Enums"]["graduacion_probable"]
+            | null
+          id?: string
+          id_socia: string
+          mentora_id?: string | null
+          meta_individual?: number
+          nombre: string
+          operador_id?: string | null
+          pct_avance?: number
+          reto_id: string
+          telefono?: string | null
+          tienda_visita?: string | null
+          updated_at?: string
+          venta_acumulada?: number
+          venta_semanal?: number
+        }
+        Update: {
+          baseline_mensual?: number
+          created_at?: string
+          dias_sin_compra?: number
+          estado?: Database["public"]["Enums"]["socia_estado"]
+          graduacion_probable?:
+            | Database["public"]["Enums"]["graduacion_probable"]
+            | null
+          id?: string
+          id_socia?: string
+          mentora_id?: string | null
+          meta_individual?: number
+          nombre?: string
+          operador_id?: string | null
+          pct_avance?: number
+          reto_id?: string
+          telefono?: string | null
+          tienda_visita?: string | null
+          updated_at?: string
+          venta_acumulada?: number
+          venta_semanal?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "socias_reto_reto_id_fkey"
+            columns: ["reto_id"]
+            isOneToOne: false
+            referencedRelation: "retos"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       usuarios: {
         Row: {
@@ -89,6 +296,54 @@ export type Database = {
         }
         Relationships: []
       }
+      ventas_diarias: {
+        Row: {
+          carga_id: string | null
+          created_at: string
+          delta_diario: number
+          fecha: string
+          id: string
+          reto_id: string
+          socia_reto_id: string
+          venta_acumulada: number
+        }
+        Insert: {
+          carga_id?: string | null
+          created_at?: string
+          delta_diario?: number
+          fecha: string
+          id?: string
+          reto_id: string
+          socia_reto_id: string
+          venta_acumulada?: number
+        }
+        Update: {
+          carga_id?: string | null
+          created_at?: string
+          delta_diario?: number
+          fecha?: string
+          id?: string
+          reto_id?: string
+          socia_reto_id?: string
+          venta_acumulada?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ventas_diarias_reto_id_fkey"
+            columns: ["reto_id"]
+            isOneToOne: false
+            referencedRelation: "retos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ventas_diarias_socia_reto_id_fkey"
+            columns: ["socia_reto_id"]
+            isOneToOne: false
+            referencedRelation: "socias_reto"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -97,6 +352,9 @@ export type Database = {
       is_director_or_gerente: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
+      graduacion_probable: "G1" | "G2" | "G3"
+      reto_estado: "borrador" | "publicado" | "cerrado"
+      socia_estado: "inscrita" | "activa" | "en_riesgo" | "inactiva"
       user_role: "director" | "gerente" | "operador" | "call_center" | "mentora"
     }
     CompositeTypes: {
@@ -225,6 +483,9 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      graduacion_probable: ["G1", "G2", "G3"],
+      reto_estado: ["borrador", "publicado", "cerrado"],
+      socia_estado: ["inscrita", "activa", "en_riesgo", "inactiva"],
       user_role: ["director", "gerente", "operador", "call_center", "mentora"],
     },
   },

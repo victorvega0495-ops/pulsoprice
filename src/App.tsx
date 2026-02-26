@@ -10,6 +10,7 @@ import Login from "./pages/Login";
 import Setup from "./pages/Setup";
 import Placeholder from "./pages/Placeholder";
 import Equipo from "./pages/Equipo";
+import RetoActivo from "./pages/RetoActivo";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -64,7 +65,7 @@ const App = () => (
             <Route path="/retos" element={<LayoutRoute />} />
             <Route path="/equipo" element={<ProtectedRoute><AppLayout><Equipo /></AppLayout></ProtectedRoute>} />
             <Route path="/dashboard-operativo" element={<LayoutRoute />} />
-            <Route path="/reto-activo" element={<LayoutRoute />} />
+            <Route path="/reto-activo" element={<ProtectedRoute><AppLayout><RetoActivo /></AppLayout></ProtectedRoute>} />
             <Route path="/pipeline" element={<LayoutRoute />} />
             <Route path="/reglas" element={<LayoutRoute />} />
             <Route path="/centro-ia" element={<LayoutRoute />} />
