@@ -20,7 +20,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Verify calling user
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
@@ -38,7 +37,6 @@ Deno.serve(async (req) => {
 
     const callerUid = claimsData.claims.sub;
 
-    // Check caller is director or gerente
     const { data: callerProfile } = await supabaseClient
       .from("usuarios")
       .select("rol")
@@ -58,7 +56,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { email, password, nombre, rol, modo_operativo } = await req.json();
+    const { email, password, nombre, rol } = await req.json();
 
     if (!email || !password || !nombre || !rol) {
       return new Response(
@@ -70,7 +68,17 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Use service role to create user without affecting current session
+    const validRoles = ["director", "gerente", "coordinador", "desarrolladora"];
+    if (!validRoles.includes(rol)) {
+      return new Response(
+        JSON.stringify({ error: `Invalid role: ${rol}. Valid roles: ${validRoles.join(", ")}` }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -90,7 +98,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Insert into usuarios table
     const { error: insertError } = await supabaseAdmin
       .from("usuarios")
       .insert({
@@ -98,11 +105,9 @@ Deno.serve(async (req) => {
         nombre,
         email,
         rol,
-        modo_operativo: modo_operativo || [],
       });
 
     if (insertError) {
-      // Cleanup: delete auth user if insert fails
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
       return new Response(JSON.stringify({ error: insertError.message }), {
         status: 400,

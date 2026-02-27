@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
@@ -20,7 +19,7 @@ import {
 } from "@/components/ui/select";
 import { Plus, UserPlus, Users } from "lucide-react";
 
-type UserRole = "director" | "gerente" | "operador" | "call_center";
+type UserRole = "director" | "gerente" | "coordinador" | "desarrolladora";
 
 interface TeamMember {
   id: string;
@@ -28,7 +27,6 @@ interface TeamMember {
   nombre: string;
   email: string;
   rol: string;
-  modo_operativo: string[] | null;
   activo: boolean;
   source: "usuario" | "mentora";
   telefono?: string;
@@ -37,22 +35,17 @@ interface TeamMember {
 }
 
 const rolBadge: Record<string, { label: string; className: string }> = {
-  director: { label: "Director", className: "bg-primary/20 text-primary border-primary/30" },
-  gerente: { label: "Gerente", className: "bg-primary/20 text-primary border-primary/30" },
-  operador: { label: "Operador", className: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
-  call_center: { label: "Call Center", className: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
-  mentora: { label: "Mentora", className: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
-};
-
-const modoBadge: Record<string, { label: string; className: string }> = {
-  operacion: { label: "Operación", className: "bg-blue-500/15 text-blue-400 border-blue-500/20" },
-  seguimiento: { label: "Seguimiento", className: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20" },
+  director: { label: "Director", className: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
+  gerente: { label: "Gerente", className: "bg-blue-800/20 text-blue-300 border-blue-800/30" },
+  coordinador: { label: "Coordinador", className: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
+  desarrolladora: { label: "Desarrolladora", className: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
+  mentora: { label: "Mentora", className: "bg-pink-500/20 text-pink-400 border-pink-500/30" },
 };
 
 const filterTabs = [
   { value: "todos", label: "Todos" },
-  { value: "operador", label: "Operadores" },
-  { value: "call_center", label: "Call Center" },
+  { value: "coordinador", label: "Coordinadores" },
+  { value: "desarrolladora", label: "Desarrolladoras" },
   { value: "mentora", label: "Mentoras" },
 ];
 
@@ -64,7 +57,6 @@ export default function Equipo() {
   const [createMentoraOpen, setCreateMentoraOpen] = useState(false);
   const [editMember, setEditMember] = useState<TeamMember | null>(null);
 
-  // Fetch usuarios
   const { data: usuarios = [] } = useQuery({
     queryKey: ["usuarios"],
     queryFn: async () => {
@@ -74,7 +66,6 @@ export default function Equipo() {
     },
   });
 
-  // Fetch mentoras
   const { data: mentoras = [] } = useQuery({
     queryKey: ["mentoras"],
     queryFn: async () => {
@@ -86,7 +77,6 @@ export default function Equipo() {
         nombre: m.nombre,
         email: "",
         rol: "mentora",
-        modo_operativo: null,
         activo: m.activa,
         source: "mentora" as const,
         telefono: m.telefono,
@@ -124,7 +114,6 @@ export default function Equipo() {
         )}
       </div>
 
-      {/* Filter tabs */}
       <div className="flex gap-1 rounded-lg bg-secondary p-1">
         {filterTabs.map((tab) => (
           <button
@@ -141,7 +130,6 @@ export default function Equipo() {
         ))}
       </div>
 
-      {/* Table */}
       <div className="rounded-lg border bg-card">
         <Table>
           <TableHeader>
@@ -149,14 +137,13 @@ export default function Equipo() {
               <TableHead>Nombre</TableHead>
               <TableHead>Email</TableHead>
               <TableHead>Rol</TableHead>
-              <TableHead>Modo Operativo</TableHead>
               <TableHead>Estado</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
                   <Users className="mx-auto mb-2 h-8 w-8 opacity-40" />
                   No hay miembros en esta categoría
                 </TableCell>
@@ -181,19 +168,6 @@ export default function Equipo() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {member.rol === "operador" && member.modo_operativo?.length ? (
-                      <div className="flex gap-1">
-                        {member.modo_operativo.map((m) => (
-                          <Badge key={m} variant="outline" className={modoBadge[m]?.className}>
-                            {modoBadge[m]?.label || m}
-                          </Badge>
-                        ))}
-                      </div>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
                     <div className="flex items-center gap-2">
                       <span
                         className={`h-2 w-2 rounded-full ${
@@ -212,21 +186,18 @@ export default function Equipo() {
         </Table>
       </div>
 
-      {/* Create User Modal */}
       <CreateUserDialog
         open={createUserOpen}
         onOpenChange={setCreateUserOpen}
         onSuccess={() => queryClient.invalidateQueries({ queryKey: ["usuarios"] })}
       />
 
-      {/* Create Mentora Modal */}
       <CreateMentoraDialog
         open={createMentoraOpen}
         onOpenChange={setCreateMentoraOpen}
         onSuccess={() => queryClient.invalidateQueries({ queryKey: ["mentoras"] })}
       />
 
-      {/* Edit Member Modal */}
       {editMember && (
         <EditMemberDialog
           member={editMember}
@@ -245,28 +216,15 @@ export default function Equipo() {
 
 /* ─── Create User Dialog ─── */
 function CreateUserDialog({
-  open,
-  onOpenChange,
-  onSuccess,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSuccess: () => void;
-}) {
+  open, onOpenChange, onSuccess,
+}: { open: boolean; onOpenChange: (open: boolean) => void; onSuccess: () => void; }) {
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [rol, setRol] = useState<UserRole>("operador");
-  const [modos, setModos] = useState<string[]>([]);
+  const [rol, setRol] = useState<UserRole>("coordinador");
   const [loading, setLoading] = useState(false);
 
-  const reset = () => {
-    setNombre("");
-    setEmail("");
-    setPassword("");
-    setRol("operador");
-    setModos([]);
-  };
+  const reset = () => { setNombre(""); setEmail(""); setPassword(""); setRol("coordinador"); };
 
   const handleSubmit = async () => {
     if (!nombre.trim() || !email.trim() || !password.trim()) {
@@ -280,21 +238,12 @@ function CreateUserDialog({
 
     setLoading(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
       const res = await supabase.functions.invoke("create-user", {
-        body: {
-          email: email.trim(),
-          password,
-          nombre: nombre.trim(),
-          rol,
-          modo_operativo: rol === "operador" ? modos : [],
-        },
+        body: { email: email.trim(), password, nombre: nombre.trim(), rol },
       });
-
       if (res.error || res.data?.error) {
         throw new Error(res.data?.error || res.error?.message || "Error al crear usuario");
       }
-
       toast({ title: "Usuario creado", description: `${nombre} fue agregado al equipo` });
       reset();
       onOpenChange(false);
@@ -333,34 +282,14 @@ function CreateUserDialog({
               <SelectContent>
                 <SelectItem value="director">Director</SelectItem>
                 <SelectItem value="gerente">Gerente</SelectItem>
-                <SelectItem value="operador">Operador</SelectItem>
-                <SelectItem value="call_center">Call Center</SelectItem>
+                <SelectItem value="coordinador">Coordinador</SelectItem>
+                <SelectItem value="desarrolladora">Desarrolladora</SelectItem>
               </SelectContent>
             </Select>
           </div>
-          {rol === "operador" && (
-            <div className="space-y-2">
-              <Label>Modo operativo</Label>
-              <div className="flex gap-4">
-                {[{ id: "operacion", label: "Operación" }, { id: "seguimiento", label: "Seguimiento" }].map((m) => (
-                  <label key={m.id} className="flex items-center gap-2 text-sm">
-                    <Checkbox
-                      checked={modos.includes(m.id)}
-                      onCheckedChange={(checked) =>
-                        setModos(checked ? [...modos, m.id] : modos.filter((x) => x !== m.id))
-                      }
-                    />
-                    {m.label}
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => { reset(); onOpenChange(false); }}>
-            Cancelar
-          </Button>
+          <Button variant="outline" onClick={() => { reset(); onOpenChange(false); }}>Cancelar</Button>
           <Button onClick={handleSubmit} disabled={loading}>
             {loading ? "Creando..." : "Crear miembro"}
           </Button>
@@ -372,26 +301,15 @@ function CreateUserDialog({
 
 /* ─── Create Mentora Dialog ─── */
 function CreateMentoraDialog({
-  open,
-  onOpenChange,
-  onSuccess,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSuccess: () => void;
-}) {
+  open, onOpenChange, onSuccess,
+}: { open: boolean; onOpenChange: (open: boolean) => void; onSuccess: () => void; }) {
   const [nombre, setNombre] = useState("");
   const [telefono, setTelefono] = useState("");
   const [idSocia, setIdSocia] = useState("");
   const [pin, setPin] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const reset = () => {
-    setNombre("");
-    setTelefono("");
-    setIdSocia("");
-    setPin("");
-  };
+  const reset = () => { setNombre(""); setTelefono(""); setIdSocia(""); setPin(""); };
 
   const handleSubmit = async () => {
     if (!nombre.trim() || !telefono.trim() || !pin.trim()) {
@@ -402,27 +320,18 @@ function CreateMentoraDialog({
       toast({ title: "PIN inválido", description: "El PIN debe ser de 4 dígitos", variant: "destructive" });
       return;
     }
-
     setLoading(true);
     try {
       const { error } = await supabase.from("mentoras").insert({
-        nombre: nombre.trim(),
-        telefono: telefono.trim(),
-        id_socia: idSocia.trim() || null,
-        pin_acceso: pin,
+        nombre: nombre.trim(), telefono: telefono.trim(),
+        id_socia: idSocia.trim() || null, pin_acceso: pin,
       });
-
       if (error) throw error;
-
       toast({ title: "Mentora creada", description: `${nombre} fue agregada al equipo` });
-      reset();
-      onOpenChange(false);
-      onSuccess();
+      reset(); onOpenChange(false); onSuccess();
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   return (
@@ -451,9 +360,7 @@ function CreateMentoraDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => { reset(); onOpenChange(false); }}>
-            Cancelar
-          </Button>
+          <Button variant="outline" onClick={() => { reset(); onOpenChange(false); }}>Cancelar</Button>
           <Button onClick={handleSubmit} disabled={loading}>
             {loading ? "Creando..." : "Crear mentora"}
           </Button>
@@ -465,19 +372,10 @@ function CreateMentoraDialog({
 
 /* ─── Edit Member Dialog ─── */
 function EditMemberDialog({
-  member,
-  open,
-  onOpenChange,
-  onSuccess,
-}: {
-  member: TeamMember;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSuccess: () => void;
-}) {
+  member, open, onOpenChange, onSuccess,
+}: { member: TeamMember; open: boolean; onOpenChange: (open: boolean) => void; onSuccess: () => void; }) {
   const [nombre, setNombre] = useState(member.nombre);
   const [rol, setRol] = useState(member.rol);
-  const [modos, setModos] = useState<string[]>(member.modo_operativo || []);
   const [activo, setActivo] = useState(member.activo);
   const [loading, setLoading] = useState(false);
 
@@ -495,23 +393,15 @@ function EditMemberDialog({
       } else {
         const { error } = await supabase
           .from("usuarios")
-          .update({
-            nombre: nombre.trim(),
-            rol: rol as any,
-            modo_operativo: rol === "operador" ? modos : [],
-            activo,
-          })
+          .update({ nombre: nombre.trim(), rol: rol as any, activo })
           .eq("id", member.id);
         if (error) throw error;
       }
-
       toast({ title: "Actualizado", description: `${nombre} fue actualizado` });
       onSuccess();
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   return (
@@ -539,29 +429,11 @@ function EditMemberDialog({
                   <SelectContent>
                     <SelectItem value="director">Director</SelectItem>
                     <SelectItem value="gerente">Gerente</SelectItem>
-                    <SelectItem value="operador">Operador</SelectItem>
-                    <SelectItem value="call_center">Call Center</SelectItem>
+                    <SelectItem value="coordinador">Coordinador</SelectItem>
+                    <SelectItem value="desarrolladora">Desarrolladora</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              {rol === "operador" && (
-                <div className="space-y-2">
-                  <Label>Modo operativo</Label>
-                  <div className="flex gap-4">
-                    {[{ id: "operacion", label: "Operación" }, { id: "seguimiento", label: "Seguimiento" }].map((m) => (
-                      <label key={m.id} className="flex items-center gap-2 text-sm">
-                        <Checkbox
-                          checked={modos.includes(m.id)}
-                          onCheckedChange={(checked) =>
-                            setModos(checked ? [...modos, m.id] : modos.filter((x) => x !== m.id))
-                          }
-                        />
-                        {m.label}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
             </>
           )}
           <div className="flex items-center justify-between rounded-lg border p-3">
@@ -575,9 +447,7 @@ function EditMemberDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button onClick={handleSubmit} disabled={loading}>
             {loading ? "Guardando..." : "Guardar cambios"}
           </Button>

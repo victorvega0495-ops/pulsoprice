@@ -845,9 +845,11 @@ export type Database = {
         Row: {
           baseline_mensual: number
           cluster_color: string | null
+          coordinador_id: string | null
           created_at: string
           crediprice_activo: boolean
           crediprice_monto: number
+          desarrolladora_id: string | null
           dias_sin_compra: number
           estado: Database["public"]["Enums"]["socia_estado"]
           fase_seguimiento: string | null
@@ -879,9 +881,11 @@ export type Database = {
         Insert: {
           baseline_mensual?: number
           cluster_color?: string | null
+          coordinador_id?: string | null
           created_at?: string
           crediprice_activo?: boolean
           crediprice_monto?: number
+          desarrolladora_id?: string | null
           dias_sin_compra?: number
           estado?: Database["public"]["Enums"]["socia_estado"]
           fase_seguimiento?: string | null
@@ -913,9 +917,11 @@ export type Database = {
         Update: {
           baseline_mensual?: number
           cluster_color?: string | null
+          coordinador_id?: string | null
           created_at?: string
           crediprice_activo?: boolean
           crediprice_monto?: number
+          desarrolladora_id?: string | null
           dias_sin_compra?: number
           estado?: Database["public"]["Enums"]["socia_estado"]
           fase_seguimiento?: string | null
@@ -1309,7 +1315,14 @@ export type Database = {
         | "inactiva"
         | "graduada"
         | "no_graduada"
-      user_role: "director" | "gerente" | "operador" | "call_center" | "mentora"
+      user_role:
+        | "director"
+        | "gerente"
+        | "operador"
+        | "call_center"
+        | "mentora"
+        | "coordinador"
+        | "desarrolladora"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1454,7 +1467,15 @@ export const Constants = {
         "graduada",
         "no_graduada",
       ],
-      user_role: ["director", "gerente", "operador", "call_center", "mentora"],
+      user_role: [
+        "director",
+        "gerente",
+        "operador",
+        "call_center",
+        "mentora",
+        "coordinador",
+        "desarrolladora",
+      ],
     },
   },
 } as const

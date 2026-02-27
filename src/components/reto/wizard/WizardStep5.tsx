@@ -28,7 +28,7 @@ export function WizardStep5({ form, onPublished }: Props) {
   const [publishing, setPublishing] = useState(false);
 
   const validSocias = form.socias.filter((s) => !s.error);
-  const operadorIds = [...new Set(validSocias.map((s) => s.operador_id).filter(Boolean))];
+  const coordinadorIds = [...new Set(validSocias.map((s) => s.operador_id).filter(Boolean))];
   const mentoraIds = [...new Set(validSocias.map((s) => s.mentora_id).filter(Boolean))];
 
   const publish = async () => {
@@ -134,7 +134,7 @@ export function WizardStep5({ form, onPublished }: Props) {
         />
         <SummaryCard label="Meta" value={`$${form.meta_estandar.toLocaleString()} (${form.tipo_meta})`} />
         <SummaryCard label="Socias" value={String(validSocias.length)} />
-        <SummaryCard label="Operadores" value={String(operadorIds.length)} />
+        <SummaryCard label="Coordinadores" value={String(coordinadorIds.length)} />
         <SummaryCard label="Mentoras" value={String(mentoraIds.length)} />
         <SummaryCard
           label="Pesos semanales"

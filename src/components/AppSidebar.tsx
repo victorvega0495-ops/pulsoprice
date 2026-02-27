@@ -1,6 +1,6 @@
 import {
-  LayoutDashboard, Trophy, Users, Zap, GitBranch, BookOpen, Bot,
-  ListTodo, Phone, ClipboardList, Activity, LogOut
+  LayoutDashboard, Trophy, Users, GitBranch, BookOpen, Bot,
+  ListTodo, Activity, LogOut, UserCheck, FileText
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
@@ -17,7 +17,6 @@ import {
   SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { Button } from "@/components/ui/button";
 
 interface NavItem {
   title: string;
@@ -25,47 +24,55 @@ interface NavItem {
   icon: any;
 }
 
-function getNavItems(rol: string, modoOperativo: string[]): NavItem[] {
+function getNavItems(rol: string): NavItem[] {
   switch (rol) {
     case "director":
       return [
         { title: "Dashboard Ejecutivo", url: "/dashboard", icon: LayoutDashboard },
-        { title: "Cola de Trabajo", url: "/cola-trabajo", icon: ListTodo },
-        { title: "Retos", url: "/retos", icon: Trophy },
+        { title: "Reto Activo", url: "/reto-activo", icon: Trophy },
+        { title: "Pipeline", url: "/pipeline", icon: GitBranch },
         { title: "Equipo", url: "/equipo", icon: Users },
+        { title: "Centro IA", url: "/centro-ia", icon: Bot },
       ];
     case "gerente":
       return [
         { title: "Dashboard Operativo", url: "/dashboard-operativo", icon: LayoutDashboard },
+        { title: "Reto Activo", url: "/reto-activo", icon: Trophy },
         { title: "Cola de Trabajo", url: "/cola-trabajo", icon: ListTodo },
-        { title: "Reto Activo", url: "/reto-activo", icon: Zap },
-        { title: "Pipeline Seguimiento", url: "/pipeline", icon: GitBranch },
+        { title: "Pipeline", url: "/pipeline", icon: GitBranch },
         { title: "Reglas del Método", url: "/reglas", icon: BookOpen },
-        { title: "Centro de IA", url: "/centro-ia", icon: Bot },
         { title: "Equipo", url: "/equipo", icon: Users },
+        { title: "Gestión de Retos", url: "/retos", icon: Trophy },
+        { title: "Centro IA", url: "/centro-ia", icon: Bot },
       ];
-    case "operador": {
-      const items: NavItem[] = [
-        { title: "Cola de Trabajo", url: "/cola-trabajo", icon: ListTodo },
-      ];
-      const hasOperacion = modoOperativo.includes("operacion");
-      const hasSeguimiento = modoOperativo.includes("seguimiento");
-      if (hasOperacion) items.push({ title: "Mi Reto", url: "/mi-reto", icon: Trophy });
-      if (hasSeguimiento) items.push({ title: "Mi Pipeline", url: "/mi-pipeline", icon: GitBranch });
-      return items;
-    }
-    case "call_center":
+    case "coordinador":
       return [
-        { title: "Mi Lista de Llamadas", url: "/llamadas", icon: Phone },
+        { title: "Cola de Trabajo", url: "/cola-trabajo", icon: ListTodo },
+        { title: "Mi Reto", url: "/mi-reto", icon: Trophy },
+        { title: "Mis Mentoras", url: "/mis-mentoras", icon: UserCheck },
+      ];
+    case "desarrolladora":
+      return [
+        { title: "Cola de Trabajo", url: "/cola-trabajo", icon: ListTodo },
+        { title: "Mi Reto", url: "/mi-reto", icon: Trophy },
+        { title: "Contenido", url: "/contenido", icon: FileText },
       ];
     case "mentora":
       return [
-        { title: "Mis Pendientes", url: "/pendientes", icon: ClipboardList },
+        { title: "Mis Pendientes", url: "/pendientes", icon: ListTodo },
       ];
     default:
       return [];
   }
 }
+
+const rolLabel: Record<string, string> = {
+  director: "Director",
+  gerente: "Gerente",
+  coordinador: "Coordinador",
+  desarrolladora: "Desarrolladora",
+  mentora: "Mentora",
+};
 
 export function AppSidebar() {
   const { profile, signOut } = useAuth();
@@ -75,7 +82,7 @@ export function AppSidebar() {
 
   if (!profile) return null;
 
-  const navItems = getNavItems(profile.rol, profile.modo_operativo);
+  const navItems = getNavItems(profile.rol);
 
   return (
     <Sidebar collapsible="icon">
@@ -115,7 +122,7 @@ export function AppSidebar() {
         {!collapsed && (
           <div className="px-3 pb-2">
             <p className="truncate text-sm font-medium text-foreground">{profile.nombre}</p>
-            <p className="truncate text-xs text-muted-foreground capitalize">{profile.rol.replace("_", " ")}</p>
+            <p className="truncate text-xs text-muted-foreground">{rolLabel[profile.rol] || profile.rol}</p>
           </div>
         )}
         <SidebarMenu>

@@ -11,14 +11,26 @@ interface Props {
 }
 
 export function WizardStep3({ form, setForm }: Props) {
-  const { data: operadores = [] } = useQuery({
-    queryKey: ["operadores-activos"],
+  const { data: coordinadores = [] } = useQuery({
+    queryKey: ["coordinadores-activos"],
     queryFn: async () => {
       const { data } = await supabase
         .from("usuarios")
         .select("*")
         .eq("activo", true)
-        .contains("modo_operativo", ["operacion"]);
+        .eq("rol", "coordinador");
+      return data || [];
+    },
+  });
+
+  const { data: desarrolladoras = [] } = useQuery({
+    queryKey: ["desarrolladoras-activas"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("usuarios")
+        .select("*")
+        .eq("activo", true)
+        .eq("rol", "desarrolladora");
       return data || [];
     },
   });
@@ -33,74 +45,88 @@ export function WizardStep3({ form, setForm }: Props) {
 
   const validSocias = form.socias.filter((s) => !s.error);
 
-  const autoAssignOperadores = () => {
-    if (operadores.length === 0) return;
-    // Group socias by tienda, distribute evenly
+  const autoAssignCoordinadores = () => {
+    if (coordinadores.length === 0) return;
     const tiendas = [...new Set(validSocias.map((s) => s.tienda_visita))];
     const updated = [...form.socias];
-    let opIdx = 0;
-
+    let idx = 0;
     tiendas.forEach((tienda) => {
-      const sociasInTienda = updated.filter((s) => s.tienda_visita === tienda && !s.error);
-      sociasInTienda.forEach((s) => {
-        s.operador_id = operadores[opIdx % operadores.length].id;
+      updated.filter((s) => s.tienda_visita === tienda && !s.error).forEach((s) => {
+        s.operador_id = coordinadores[idx % coordinadores.length].id;
       });
-      opIdx++;
+      idx++;
     });
-
     setForm({ ...form, socias: updated });
   };
 
   const autoAssignMentoras = () => {
     if (mentoras.length === 0) return;
     const updated = [...form.socias];
-    const valid = updated.filter((s) => !s.error);
-    valid.forEach((s, i) => {
+    updated.filter((s) => !s.error).forEach((s, i) => {
       s.mentora_id = mentoras[i % mentoras.length].id;
     });
     setForm({ ...form, socias: updated });
   };
 
-  const countByOp = (opId: string) => form.socias.filter((s) => s.operador_id === opId && !s.error).length;
-  const countByMentora = (mId: string) => form.socias.filter((s) => s.mentora_id === mId && !s.error).length;
-  const sinOperador = validSocias.filter((s) => !s.operador_id).length;
+  const countByCoord = (id: string) => form.socias.filter((s) => s.operador_id === id && !s.error).length;
+  const countByMentora = (id: string) => form.socias.filter((s) => s.mentora_id === id && !s.error).length;
+  const sinCoordinador = validSocias.filter((s) => !s.operador_id).length;
   const sinMentora = validSocias.filter((s) => !s.mentora_id).length;
 
   return (
     <div className="space-y-8">
-      {/* Operadores */}
+      {/* Coordinadores */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold">Operadores</h3>
-          <Button variant="outline" size="sm" onClick={autoAssignOperadores} disabled={operadores.length === 0}>
+          <h3 className="text-lg font-semibold">Coordinadores</h3>
+          <Button variant="outline" size="sm" onClick={autoAssignCoordinadores} disabled={coordinadores.length === 0}>
             <Shuffle className="mr-2 h-4 w-4" />
             Asignar automáticamente
           </Button>
         </div>
 
-        {operadores.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No hay operadores con modo "operación" activos</p>
+        {coordinadores.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No hay coordinadores activos</p>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {operadores.map((op: any) => (
+            {coordinadores.map((op: any) => (
               <div key={op.id} className="flex items-center justify-between rounded-lg border p-3">
                 <div>
                   <p className="text-sm font-medium">{op.nombre}</p>
                   <p className="text-xs text-muted-foreground">{op.email}</p>
                 </div>
-                <Badge variant="outline">{countByOp(op.id)} socias</Badge>
+                <Badge variant="outline">{countByCoord(op.id)} socias</Badge>
               </div>
             ))}
           </div>
         )}
 
-        {sinOperador > 0 && (
+        {sinCoordinador > 0 && (
           <div className="flex items-center gap-2 text-sm text-yellow-400">
             <AlertTriangle className="h-4 w-4" />
-            {sinOperador} socias sin operador asignado
+            {sinCoordinador} socias sin coordinador asignado
           </div>
         )}
       </div>
+
+      {/* Desarrolladoras info */}
+      {desarrolladoras.length > 0 && (
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold">Desarrolladoras disponibles</h3>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {desarrolladoras.map((d: any) => (
+              <div key={d.id} className="flex items-center justify-between rounded-lg border p-3">
+                <div>
+                  <p className="text-sm font-medium">{d.nombre}</p>
+                  <p className="text-xs text-muted-foreground">{d.email}</p>
+                </div>
+                <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30">Desarrolladora</Badge>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">Las desarrolladoras se asignan después de publicar el reto</p>
+        </div>
+      )}
 
       {/* Mentoras */}
       <div className="space-y-4">
