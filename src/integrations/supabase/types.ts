@@ -19,11 +19,14 @@ export type Database = {
           asignada_a: string
           comentario_resultado: string | null
           contexto: string | null
+          contexto_ia: string | null
           created_at: string
           escalada_a: string | null
           estado: string
           fecha_completada: string | null
+          feedback_compra_48h: boolean | null
           id: string
+          mentora_id: string | null
           origen: string
           pospuesta_hasta: string | null
           prioridad: string
@@ -32,6 +35,7 @@ export type Database = {
           resultado: string | null
           reto_id: string
           socia_reto_id: string
+          tactica: string | null
           tipo: string
           titulo: string
           updated_at: string
@@ -41,11 +45,14 @@ export type Database = {
           asignada_a: string
           comentario_resultado?: string | null
           contexto?: string | null
+          contexto_ia?: string | null
           created_at?: string
           escalada_a?: string | null
           estado?: string
           fecha_completada?: string | null
+          feedback_compra_48h?: boolean | null
           id?: string
+          mentora_id?: string | null
           origen?: string
           pospuesta_hasta?: string | null
           prioridad?: string
@@ -54,6 +61,7 @@ export type Database = {
           resultado?: string | null
           reto_id: string
           socia_reto_id: string
+          tactica?: string | null
           tipo?: string
           titulo: string
           updated_at?: string
@@ -63,11 +71,14 @@ export type Database = {
           asignada_a?: string
           comentario_resultado?: string | null
           contexto?: string | null
+          contexto_ia?: string | null
           created_at?: string
           escalada_a?: string | null
           estado?: string
           fecha_completada?: string | null
+          feedback_compra_48h?: boolean | null
           id?: string
+          mentora_id?: string | null
           origen?: string
           pospuesta_hasta?: string | null
           prioridad?: string
@@ -76,6 +87,7 @@ export type Database = {
           resultado?: string | null
           reto_id?: string
           socia_reto_id?: string
+          tactica?: string | null
           tipo?: string
           titulo?: string
           updated_at?: string
@@ -103,6 +115,164 @@ export type Database = {
             referencedRelation: "socias_reto"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "acciones_operativas_socia_reto_id_fkey"
+            columns: ["socia_reto_id"]
+            isOneToOne: false
+            referencedRelation: "vista_pareto"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "acciones_operativas_socia_reto_id_fkey"
+            columns: ["socia_reto_id"]
+            isOneToOne: false
+            referencedRelation: "vista_pipeline_seguimiento"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      activaciones: {
+        Row: {
+          aprobada_por: string | null
+          categoria_foco: string | null
+          creada_por: string | null
+          created_at: string | null
+          estado: string | null
+          id: string
+          mecanica: Json | null
+          meta_activacion: number | null
+          nombre: string
+          objetivo: string | null
+          resultado: number | null
+          reto_id: string
+          tipo: string | null
+        }
+        Insert: {
+          aprobada_por?: string | null
+          categoria_foco?: string | null
+          creada_por?: string | null
+          created_at?: string | null
+          estado?: string | null
+          id?: string
+          mecanica?: Json | null
+          meta_activacion?: number | null
+          nombre: string
+          objetivo?: string | null
+          resultado?: number | null
+          reto_id: string
+          tipo?: string | null
+        }
+        Update: {
+          aprobada_por?: string | null
+          categoria_foco?: string | null
+          creada_por?: string | null
+          created_at?: string | null
+          estado?: string | null
+          id?: string
+          mecanica?: Json | null
+          meta_activacion?: number | null
+          nombre?: string
+          objetivo?: string | null
+          resultado?: number | null
+          reto_id?: string
+          tipo?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activaciones_reto_id_fkey"
+            columns: ["reto_id"]
+            isOneToOne: false
+            referencedRelation: "retos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      alertas: {
+        Row: {
+          asignada_a: string | null
+          created_at: string | null
+          estado: string | null
+          id: string
+          mensaje: string | null
+          reto_id: string
+          severidad: string
+          socia_id: string | null
+          tipo: string
+        }
+        Insert: {
+          asignada_a?: string | null
+          created_at?: string | null
+          estado?: string | null
+          id?: string
+          mensaje?: string | null
+          reto_id: string
+          severidad?: string
+          socia_id?: string | null
+          tipo: string
+        }
+        Update: {
+          asignada_a?: string | null
+          created_at?: string | null
+          estado?: string | null
+          id?: string
+          mensaje?: string | null
+          reto_id?: string
+          severidad?: string
+          socia_id?: string | null
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alertas_reto_id_fkey"
+            columns: ["reto_id"]
+            isOneToOne: false
+            referencedRelation: "retos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      analisis_ia: {
+        Row: {
+          contenido: Json
+          created_at: string | null
+          id: string
+          mentora_id: string | null
+          operador_id: string | null
+          reto_id: string
+          socia_id: string | null
+          tipo: string
+          vigencia_hasta: string | null
+        }
+        Insert: {
+          contenido: Json
+          created_at?: string | null
+          id?: string
+          mentora_id?: string | null
+          operador_id?: string | null
+          reto_id: string
+          socia_id?: string | null
+          tipo: string
+          vigencia_hasta?: string | null
+        }
+        Update: {
+          contenido?: Json
+          created_at?: string | null
+          id?: string
+          mentora_id?: string | null
+          operador_id?: string | null
+          reto_id?: string
+          socia_id?: string | null
+          tipo?: string
+          vigencia_hasta?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analisis_ia_reto_id_fkey"
+            columns: ["reto_id"]
+            isOneToOne: false
+            referencedRelation: "retos"
+            referencedColumns: ["id"]
+          },
         ]
       }
       cargas_ventas: {
@@ -114,6 +284,8 @@ export type Database = {
           fecha: string
           id: string
           reto_id: string
+          socias_con_error: number | null
+          status: string | null
           total_socias: number
           venta_total_dia: number
         }
@@ -125,6 +297,8 @@ export type Database = {
           fecha: string
           id?: string
           reto_id: string
+          socias_con_error?: number | null
+          status?: string | null
           total_socias?: number
           venta_total_dia?: number
         }
@@ -136,6 +310,8 @@ export type Database = {
           fecha?: string
           id?: string
           reto_id?: string
+          socias_con_error?: number | null
+          status?: string | null
           total_socias?: number
           venta_total_dia?: number
         }
@@ -149,12 +325,101 @@ export type Database = {
           },
         ]
       }
+      compromisos_mentora: {
+        Row: {
+          avance_empuje80: number | null
+          avance_top20: number | null
+          created_at: string | null
+          id: string
+          mentora_id: string
+          plan_empuje80: Json | null
+          plan_top20: Json | null
+          reto_id: string
+          semana: number
+        }
+        Insert: {
+          avance_empuje80?: number | null
+          avance_top20?: number | null
+          created_at?: string | null
+          id?: string
+          mentora_id: string
+          plan_empuje80?: Json | null
+          plan_top20?: Json | null
+          reto_id: string
+          semana: number
+        }
+        Update: {
+          avance_empuje80?: number | null
+          avance_top20?: number | null
+          created_at?: string | null
+          id?: string
+          mentora_id?: string
+          plan_empuje80?: Json | null
+          plan_top20?: Json | null
+          reto_id?: string
+          semana?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "compromisos_mentora_mentora_id_fkey"
+            columns: ["mentora_id"]
+            isOneToOne: false
+            referencedRelation: "mentoras"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "compromisos_mentora_reto_id_fkey"
+            columns: ["reto_id"]
+            isOneToOne: false
+            referencedRelation: "retos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      guias_contextuales: {
+        Row: {
+          contenido: string
+          contexto: string | null
+          created_at: string | null
+          editado_por: string | null
+          id: string
+          rol: string
+          semana: string | null
+          updated_at: string | null
+          version: number | null
+        }
+        Insert: {
+          contenido: string
+          contexto?: string | null
+          created_at?: string | null
+          editado_por?: string | null
+          id?: string
+          rol: string
+          semana?: string | null
+          updated_at?: string | null
+          version?: number | null
+        }
+        Update: {
+          contenido?: string
+          contexto?: string | null
+          created_at?: string | null
+          editado_por?: string | null
+          id?: string
+          rol?: string
+          semana?: string | null
+          updated_at?: string | null
+          version?: number | null
+        }
+        Relationships: []
+      }
       interacciones: {
         Row: {
           accion_id: string | null
           comentario: string | null
           created_at: string
           id: string
+          mentora_id: string | null
+          resultado: string | null
           reto_id: string
           socia_reto_id: string
           tipo: string
@@ -165,6 +430,8 @@ export type Database = {
           comentario?: string | null
           created_at?: string
           id?: string
+          mentora_id?: string | null
+          resultado?: string | null
           reto_id: string
           socia_reto_id: string
           tipo?: string
@@ -175,6 +442,8 @@ export type Database = {
           comentario?: string | null
           created_at?: string
           id?: string
+          mentora_id?: string | null
+          resultado?: string | null
           reto_id?: string
           socia_reto_id?: string
           tipo?: string
@@ -186,6 +455,13 @@ export type Database = {
             columns: ["accion_id"]
             isOneToOne: false
             referencedRelation: "acciones_operativas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "interacciones_accion_id_fkey"
+            columns: ["accion_id"]
+            isOneToOne: false
+            referencedRelation: "vista_cola_trabajo"
             referencedColumns: ["id"]
           },
           {
@@ -202,6 +478,111 @@ export type Database = {
             referencedRelation: "socias_reto"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "interacciones_socia_reto_id_fkey"
+            columns: ["socia_reto_id"]
+            isOneToOne: false
+            referencedRelation: "vista_pareto"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "interacciones_socia_reto_id_fkey"
+            columns: ["socia_reto_id"]
+            isOneToOne: false
+            referencedRelation: "vista_pipeline_seguimiento"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      items_llamada: {
+        Row: {
+          contexto: string | null
+          created_at: string | null
+          id: string
+          intentos: number | null
+          lista_id: string
+          llamada_at: string | null
+          nombre_socia: string | null
+          operador_id: string | null
+          resultado: string | null
+          socia_id: string | null
+          telefono: string | null
+        }
+        Insert: {
+          contexto?: string | null
+          created_at?: string | null
+          id?: string
+          intentos?: number | null
+          lista_id: string
+          llamada_at?: string | null
+          nombre_socia?: string | null
+          operador_id?: string | null
+          resultado?: string | null
+          socia_id?: string | null
+          telefono?: string | null
+        }
+        Update: {
+          contexto?: string | null
+          created_at?: string | null
+          id?: string
+          intentos?: number | null
+          lista_id?: string
+          llamada_at?: string | null
+          nombre_socia?: string | null
+          operador_id?: string | null
+          resultado?: string | null
+          socia_id?: string | null
+          telefono?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "items_llamada_lista_id_fkey"
+            columns: ["lista_id"]
+            isOneToOne: false
+            referencedRelation: "listas_llamadas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      listas_llamadas: {
+        Row: {
+          asignada_a: string | null
+          creada_por: string | null
+          created_at: string | null
+          id: string
+          motivo: string | null
+          nombre: string
+          reto_id: string
+          status: string | null
+        }
+        Insert: {
+          asignada_a?: string | null
+          creada_por?: string | null
+          created_at?: string | null
+          id?: string
+          motivo?: string | null
+          nombre: string
+          reto_id: string
+          status?: string | null
+        }
+        Update: {
+          asignada_a?: string | null
+          creada_por?: string | null
+          created_at?: string | null
+          id?: string
+          motivo?: string | null
+          nombre?: string
+          reto_id?: string
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "listas_llamadas_reto_id_fkey"
+            columns: ["reto_id"]
+            isOneToOne: false
+            referencedRelation: "retos"
+            referencedColumns: ["id"]
+          },
         ]
       }
       mentoras: {
@@ -213,6 +594,7 @@ export type Database = {
           id_socia: string | null
           nombre: string
           pin_acceso: string
+          retos_count: number | null
           telefono: string
           updated_at: string
         }
@@ -224,6 +606,7 @@ export type Database = {
           id_socia?: string | null
           nombre: string
           pin_acceso: string
+          retos_count?: number | null
           telefono: string
           updated_at?: string
         }
@@ -235,6 +618,7 @@ export type Database = {
           id_socia?: string | null
           nombre?: string
           pin_acceso?: string
+          retos_count?: number | null
           telefono?: string
           updated_at?: string
         }
@@ -374,7 +758,9 @@ export type Database = {
           id: string
           meta_estandar: number
           nombre: string
+          pesos_diarios: Json | null
           pesos_semanales: Json
+          tiendas: string[] | null
           tipo_meta: string
           updated_at: string
         }
@@ -387,7 +773,9 @@ export type Database = {
           id?: string
           meta_estandar?: number
           nombre: string
+          pesos_diarios?: Json | null
           pesos_semanales?: Json
+          tiendas?: string[] | null
           tipo_meta?: string
           updated_at?: string
         }
@@ -400,15 +788,63 @@ export type Database = {
           id?: string
           meta_estandar?: number
           nombre?: string
+          pesos_diarios?: Json | null
           pesos_semanales?: Json
+          tiendas?: string[] | null
           tipo_meta?: string
           updated_at?: string
         }
         Relationships: []
       }
+      score_mentoras: {
+        Row: {
+          created_at: string | null
+          distribucion_socias: Json | null
+          id: string
+          mentora_id: string
+          reto_id: string
+          score_ponderado: number | null
+          semana: number
+        }
+        Insert: {
+          created_at?: string | null
+          distribucion_socias?: Json | null
+          id?: string
+          mentora_id: string
+          reto_id: string
+          score_ponderado?: number | null
+          semana: number
+        }
+        Update: {
+          created_at?: string | null
+          distribucion_socias?: Json | null
+          id?: string
+          mentora_id?: string
+          reto_id?: string
+          score_ponderado?: number | null
+          semana?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "score_mentoras_mentora_id_fkey"
+            columns: ["mentora_id"]
+            isOneToOne: false
+            referencedRelation: "mentoras"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "score_mentoras_reto_id_fkey"
+            columns: ["reto_id"]
+            isOneToOne: false
+            referencedRelation: "retos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       socias_reto: {
         Row: {
           baseline_mensual: number
+          cluster_color: string | null
           created_at: string
           crediprice_activo: boolean
           crediprice_monto: number
@@ -432,6 +868,8 @@ export type Database = {
           score_presentacion: number
           score_prospeccion: number
           score_recurrencia: number
+          scorecard_habilidades: Json | null
+          semana_activa: number | null
           telefono: string | null
           tienda_visita: string | null
           updated_at: string
@@ -440,6 +878,7 @@ export type Database = {
         }
         Insert: {
           baseline_mensual?: number
+          cluster_color?: string | null
           created_at?: string
           crediprice_activo?: boolean
           crediprice_monto?: number
@@ -463,6 +902,8 @@ export type Database = {
           score_presentacion?: number
           score_prospeccion?: number
           score_recurrencia?: number
+          scorecard_habilidades?: Json | null
+          semana_activa?: number | null
           telefono?: string | null
           tienda_visita?: string | null
           updated_at?: string
@@ -471,6 +912,7 @@ export type Database = {
         }
         Update: {
           baseline_mensual?: number
+          cluster_color?: string | null
           created_at?: string
           crediprice_activo?: boolean
           crediprice_monto?: number
@@ -494,6 +936,8 @@ export type Database = {
           score_presentacion?: number
           score_prospeccion?: number
           score_recurrencia?: number
+          scorecard_habilidades?: Json | null
+          semana_activa?: number | null
           telefono?: string | null
           tienda_visita?: string | null
           updated_at?: string
@@ -556,6 +1000,7 @@ export type Database = {
           delta_diario: number
           fecha: string
           id: string
+          id_socia: string | null
           reto_id: string
           socia_reto_id: string
           venta_acumulada: number
@@ -566,6 +1011,7 @@ export type Database = {
           delta_diario?: number
           fecha: string
           id?: string
+          id_socia?: string | null
           reto_id: string
           socia_reto_id: string
           venta_acumulada?: number
@@ -576,6 +1022,7 @@ export type Database = {
           delta_diario?: number
           fecha?: string
           id?: string
+          id_socia?: string | null
           reto_id?: string
           socia_reto_id?: string
           venta_acumulada?: number
@@ -595,11 +1042,249 @@ export type Database = {
             referencedRelation: "socias_reto"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "ventas_diarias_socia_reto_id_fkey"
+            columns: ["socia_reto_id"]
+            isOneToOne: false
+            referencedRelation: "vista_pareto"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ventas_diarias_socia_reto_id_fkey"
+            columns: ["socia_reto_id"]
+            isOneToOne: false
+            referencedRelation: "vista_pipeline_seguimiento"
+            referencedColumns: ["id"]
+          },
         ]
       }
     }
     Views: {
-      [_ in never]: never
+      vista_avance_diario_reto: {
+        Row: {
+          dia_numero: number | null
+          diferencia: number | null
+          fecha: string | null
+          id: string | null
+          meta_acumulada_objetivo: number | null
+          pct_avance: number | null
+          reto_id: string | null
+          semana: number | null
+          venta_real_acumulada: number | null
+        }
+        Insert: {
+          dia_numero?: number | null
+          diferencia?: never
+          fecha?: string | null
+          id?: string | null
+          meta_acumulada_objetivo?: number | null
+          pct_avance?: never
+          reto_id?: string | null
+          semana?: number | null
+          venta_real_acumulada?: number | null
+        }
+        Update: {
+          dia_numero?: number | null
+          diferencia?: never
+          fecha?: string | null
+          id?: string | null
+          meta_acumulada_objetivo?: number | null
+          pct_avance?: never
+          reto_id?: string | null
+          semana?: number | null
+          venta_real_acumulada?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "metas_diarias_reto_reto_id_fkey"
+            columns: ["reto_id"]
+            isOneToOne: false
+            referencedRelation: "retos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vista_avance_por_coordinador: {
+        Row: {
+          operador_id: string | null
+          operador_nombre: string | null
+          pct_avance: number | null
+          reto_id: string | null
+          total_socias: number | null
+          venta_grupo: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "socias_reto_reto_id_fkey"
+            columns: ["reto_id"]
+            isOneToOne: false
+            referencedRelation: "retos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vista_avance_por_mentora: {
+        Row: {
+          mentora_id: string | null
+          mentora_nombre: string | null
+          meta_grupo: number | null
+          pct_avance: number | null
+          reto_id: string | null
+          socias_con_compra: number | null
+          socias_en_riesgo: number | null
+          socias_inactivas: number | null
+          total_socias: number | null
+          venta_grupo: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "socias_reto_reto_id_fkey"
+            columns: ["reto_id"]
+            isOneToOne: false
+            referencedRelation: "retos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vista_cola_trabajo: {
+        Row: {
+          asignada_a: string | null
+          contexto: string | null
+          created_at: string | null
+          dias_sin_compra: number | null
+          estado: string | null
+          id: string | null
+          id_socia: string | null
+          origen: string | null
+          pospuesta_hasta: string | null
+          prioridad: string | null
+          regla_id: string | null
+          reto_id: string | null
+          socia_estado: Database["public"]["Enums"]["socia_estado"] | null
+          socia_nombre: string | null
+          socia_reto_id: string | null
+          socia_telefono: string | null
+          titulo: string | null
+          veces_pospuesta: number | null
+          venta_acumulada: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "acciones_operativas_regla_id_fkey"
+            columns: ["regla_id"]
+            isOneToOne: false
+            referencedRelation: "reglas_metodo"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "acciones_operativas_reto_id_fkey"
+            columns: ["reto_id"]
+            isOneToOne: false
+            referencedRelation: "retos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "acciones_operativas_socia_reto_id_fkey"
+            columns: ["socia_reto_id"]
+            isOneToOne: false
+            referencedRelation: "socias_reto"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "acciones_operativas_socia_reto_id_fkey"
+            columns: ["socia_reto_id"]
+            isOneToOne: false
+            referencedRelation: "vista_pareto"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "acciones_operativas_socia_reto_id_fkey"
+            columns: ["socia_reto_id"]
+            isOneToOne: false
+            referencedRelation: "vista_pipeline_seguimiento"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vista_pareto: {
+        Row: {
+          id: string | null
+          id_socia: string | null
+          mentora_id: string | null
+          meta_individual: number | null
+          nombre: string | null
+          operador_id: string | null
+          pct_acumulado: number | null
+          pct_del_total: number | null
+          reto_id: string | null
+          venta_acumulada: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "socias_reto_reto_id_fkey"
+            columns: ["reto_id"]
+            isOneToOne: false
+            referencedRelation: "retos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vista_pipeline_seguimiento: {
+        Row: {
+          estado: Database["public"]["Enums"]["socia_estado"] | null
+          fase_seguimiento: string | null
+          graduacion_probable:
+            | Database["public"]["Enums"]["graduacion_probable"]
+            | null
+          id: string | null
+          id_socia: string | null
+          mentora_id: string | null
+          nombre: string | null
+          operador_id: string | null
+          pct_avance: number | null
+          reto_id: string | null
+          venta_acumulada: number | null
+        }
+        Insert: {
+          estado?: Database["public"]["Enums"]["socia_estado"] | null
+          fase_seguimiento?: string | null
+          graduacion_probable?:
+            | Database["public"]["Enums"]["graduacion_probable"]
+            | null
+          id?: string | null
+          id_socia?: string | null
+          mentora_id?: string | null
+          nombre?: string | null
+          operador_id?: string | null
+          pct_avance?: number | null
+          reto_id?: string | null
+          venta_acumulada?: number | null
+        }
+        Update: {
+          estado?: Database["public"]["Enums"]["socia_estado"] | null
+          fase_seguimiento?: string | null
+          graduacion_probable?:
+            | Database["public"]["Enums"]["graduacion_probable"]
+            | null
+          id?: string | null
+          id_socia?: string | null
+          mentora_id?: string | null
+          nombre?: string | null
+          operador_id?: string | null
+          pct_avance?: number | null
+          reto_id?: string | null
+          venta_acumulada?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "socias_reto_reto_id_fkey"
+            columns: ["reto_id"]
+            isOneToOne: false
+            referencedRelation: "retos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       fn_validar_transicion_estado: {
@@ -610,13 +1295,20 @@ export type Database = {
     }
     Enums: {
       graduacion_probable: "G1" | "G2" | "G3"
-      reto_estado: "borrador" | "publicado" | "cerrado"
+      reto_estado:
+        | "borrador"
+        | "publicado"
+        | "cerrado"
+        | "activo"
+        | "en_cierre"
+        | "cancelado"
       socia_estado:
         | "inscrita"
         | "activa"
         | "en_riesgo"
         | "inactiva"
         | "graduada"
+        | "no_graduada"
       user_role: "director" | "gerente" | "operador" | "call_center" | "mentora"
     }
     CompositeTypes: {
@@ -746,8 +1438,22 @@ export const Constants = {
   public: {
     Enums: {
       graduacion_probable: ["G1", "G2", "G3"],
-      reto_estado: ["borrador", "publicado", "cerrado"],
-      socia_estado: ["inscrita", "activa", "en_riesgo", "inactiva", "graduada"],
+      reto_estado: [
+        "borrador",
+        "publicado",
+        "cerrado",
+        "activo",
+        "en_cierre",
+        "cancelado",
+      ],
+      socia_estado: [
+        "inscrita",
+        "activa",
+        "en_riesgo",
+        "inactiva",
+        "graduada",
+        "no_graduada",
+      ],
       user_role: ["director", "gerente", "operador", "call_center", "mentora"],
     },
   },
