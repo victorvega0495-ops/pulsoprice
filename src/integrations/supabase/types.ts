@@ -1293,10 +1293,18 @@ export type Database = {
       }
     }
     Functions: {
-      fn_validar_transicion_estado: {
-        Args: { p_nuevo_estado: string; p_socia_reto_id: string }
-        Returns: boolean
-      }
+      fn_validar_transicion_estado:
+        | {
+            Args: {
+              p_nuevo_estado: Database["public"]["Enums"]["socia_estado"]
+              p_socia_reto_id: string
+            }
+            Returns: boolean
+          }
+        | {
+            Args: { p_nuevo_estado: string; p_socia_reto_id: string }
+            Returns: boolean
+          }
       is_director_or_gerente: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {

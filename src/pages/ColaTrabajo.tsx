@@ -71,20 +71,43 @@ export default function ColaTrabajo() {
   const [posponerFecha, setPosponerFecha] = useState<Date | undefined>();
   const [posponerOpcion, setPosponerOpcion] = useState("");
   const [filterOperador, setFilterOperador] = useState("todos");
+  const [filterRetoId, setFilterRetoId] = useState<string>("auto");
   const [generando, setGenerando] = useState(false);
   const [fichaOpen, setFichaOpen] = useState<string | null>(null);
 
   const isManager = profile?.rol === "director" || profile?.rol === "gerente";
 
+  // Fetch retos for filter
+  const { data: retosDisponibles = [] } = useQuery({
+    queryKey: ["retos-cola"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("retos")
+        .select("id, nombre, estado")
+        .in("estado", ["publicado", "activo", "en_cierre"])
+        .order("created_at", { ascending: false });
+      return data || [];
+    },
+  });
+
+  // Determine the active reto id for default filter
+  const activeRetoId = filterRetoId === "auto"
+    ? (retosDisponibles.find((r: any) => r.estado === "activo")?.id || retosDisponibles[0]?.id || null)
+    : filterRetoId === "todos" ? null : filterRetoId;
+
   // Fetch acciones
   const { data: acciones = [], isLoading } = useQuery({
-    queryKey: ["cola-trabajo", profile?.id],
+    queryKey: ["cola-trabajo", profile?.id, activeRetoId],
     queryFn: async () => {
       let query = supabase
         .from("acciones_operativas")
-        .select("*, socias_reto!inner(nombre, telefono, tienda_visita, venta_acumulada, meta_individual, dias_sin_compra, estado, id_socia)")
+        .select("*, socias_reto!inner(nombre, telefono, tienda_visita, venta_acumulada, meta_individual, dias_sin_compra, estado, id_socia), retos!inner(nombre)")
         .in("estado", ["pendiente", "pospuesta"])
         .order("created_at", { ascending: true });
+
+      if (activeRetoId) {
+        query = query.eq("reto_id", activeRetoId);
+      }
 
       if (!isManager && user) {
         query = query.eq("asignada_a", user.id);
@@ -215,7 +238,8 @@ export default function ColaTrabajo() {
       const { data: retoActivo } = await supabase
         .from("retos")
         .select("id")
-        .eq("estado", "publicado")
+        .in("estado", ["activo", "publicado"])
+        .order("created_at", { ascending: false })
         .limit(1)
         .single();
 
@@ -290,6 +314,18 @@ export default function ColaTrabajo() {
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
+        <Select value={filterRetoId} onValueChange={setFilterRetoId}>
+          <SelectTrigger className="w-56">
+            <SelectValue placeholder="Reto" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="auto">Reto activo más reciente</SelectItem>
+            <SelectItem value="todos">Todos los retos</SelectItem>
+            {retosDisponibles.map((r: any) => (
+              <SelectItem key={r.id} value={r.id}>{r.nombre}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Tabs value={filter} onValueChange={(v) => { setFilter(v); setFilterOperador("todos"); }}>
           <TabsList>
             <TabsTrigger value="todas">Todas</TabsTrigger>
@@ -352,6 +388,7 @@ export default function ColaTrabajo() {
                     <p className="text-xs text-muted-foreground/70 line-clamp-2">{accion.contexto}</p>
                   )}
                   <p className="text-[10px] text-muted-foreground/50">
+                    {accion.retos?.nombre && <span className="text-muted-foreground/70">{accion.retos.nombre} · </span>}
                     {formatDistanceToNow(new Date(accion.created_at), { addSuffix: true, locale: es })}
                   </p>
                 </div>
