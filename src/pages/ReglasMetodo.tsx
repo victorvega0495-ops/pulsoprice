@@ -44,9 +44,9 @@ const TIPOS_ACCION = [
   { value: "seguimiento", label: "Seguimiento" },
 ];
 const ROLES_ASIGNAR = [
-  { value: "operador", label: "Operador" },
+  { value: "coordinador", label: "Coordinador" },
+  { value: "desarrolladora", label: "Desarrolladora" },
   { value: "mentora", label: "Mentora" },
-  { value: "call_center", label: "Call Center" },
   { value: "gerente", label: "Gerente" },
 ];
 const PRIORIDADES = [
@@ -69,7 +69,7 @@ const emptyForm = {
   accion_tipo: "contactar",
   accion_mensaje: "",
   tactica_sugerida: "",
-  asignar_a_rol: "operador",
+  asignar_a_rol: "coordinador",
   prioridad: "media",
   semanas_activas: [1, 2, 3, 4] as number[],
   activa: true,
@@ -77,12 +77,12 @@ const emptyForm = {
 
 const PREDEFINED_RULES = [
   { nombre: "Primera compra → celebrar", campo: "primera_compra", operador: "=", valor: "true", condicion_extra: false, accion_tipo: "celebrar", accion_mensaje: "¡{nombre} hizo su primera compra! Celebrar y reforzar el hábito.", asignar_a_rol: "mentora", prioridad: "alta", semanas_activas: [1,2,3,4] },
-  { nombre: "Inactividad 3 días → contactar", campo: "dias_sin_compra", operador: ">=", valor: "3", condicion_extra: false, accion_tipo: "contactar", accion_mensaje: "Socia lleva {dias_sin_compra} días sin compra. Contactar para identificar obstáculo.", asignar_a_rol: "operador", prioridad: "alta", semanas_activas: [1,2,3,4] },
+  { nombre: "Inactividad 3 días → contactar", campo: "dias_sin_compra", operador: ">=", valor: "3", condicion_extra: false, accion_tipo: "contactar", accion_mensaje: "Socia lleva {dias_sin_compra} días sin compra. Contactar para identificar obstáculo.", asignar_a_rol: "coordinador", prioridad: "alta", semanas_activas: [1,2,3,4] },
   { nombre: "Inactividad 5 días → escalar", campo: "dias_sin_compra", operador: ">=", valor: "5", condicion_extra: false, accion_tipo: "escalar", accion_mensaje: "Socia lleva {dias_sin_compra} días sin compra. Requiere intervención directa.", asignar_a_rol: "gerente", prioridad: "urgente", semanas_activas: [1,2,3,4] },
   { nombre: "Avance > 80% → reforzar", campo: "pct_avance", operador: ">=", valor: "80", condicion_extra: false, accion_tipo: "celebrar", accion_mensaje: "Socia va al {pct_avance}% de su meta. Celebrar y motivar para superar.", asignar_a_rol: "mentora", prioridad: "media", semanas_activas: [2,3,4] },
-  { nombre: "Avance < 25% en S2 → diagnosticar", campo: "pct_avance", operador: "<", valor: "25", condicion_extra: false, accion_tipo: "diagnosticar", accion_mensaje: "Socia va al {pct_avance}% en semana 2+. Diagnosticar causa y ajustar plan.", asignar_a_rol: "operador", prioridad: "alta", semanas_activas: [2,3] },
-  { nombre: "G3 probable → intervención", campo: "g_probable", operador: "=", valor: "G3", condicion_extra: false, accion_tipo: "contactar", accion_mensaje: "Socia clasificada como G3 probable. Intervención necesaria antes de que sea definitivo.", asignar_a_rol: "operador", prioridad: "urgente", semanas_activas: [3,4] },
-  { nombre: "Sin CrediPrice + inactiva → ofrecer", campo: "crediprice_activo", operador: "=", valor: "false", condicion_extra: true, campo2: "dias_sin_compra", operador2: ">=", valor2: "2", logica_extra: "AND", accion_tipo: "contactar", accion_mensaje: "Socia sin CrediPrice y con {dias_sin_compra} días sin compra. Ofrecer capital de trabajo.", asignar_a_rol: "operador", prioridad: "media", semanas_activas: [1,2] },
+  { nombre: "Avance < 25% en S2 → diagnosticar", campo: "pct_avance", operador: "<", valor: "25", condicion_extra: false, accion_tipo: "diagnosticar", accion_mensaje: "Socia va al {pct_avance}% en semana 2+. Diagnosticar causa y ajustar plan.", asignar_a_rol: "coordinador", prioridad: "alta", semanas_activas: [2,3] },
+  { nombre: "G3 probable → intervención", campo: "g_probable", operador: "=", valor: "G3", condicion_extra: false, accion_tipo: "contactar", accion_mensaje: "Socia clasificada como G3 probable. Intervención necesaria antes de que sea definitivo.", asignar_a_rol: "coordinador", prioridad: "urgente", semanas_activas: [3,4] },
+  { nombre: "Sin CrediPrice + inactiva → ofrecer", campo: "crediprice_activo", operador: "=", valor: "false", condicion_extra: true, campo2: "dias_sin_compra", operador2: ">=", valor2: "2", logica_extra: "AND", accion_tipo: "contactar", accion_mensaje: "Socia sin CrediPrice y con {dias_sin_compra} días sin compra. Ofrecer capital de trabajo.", asignar_a_rol: "coordinador", prioridad: "media", semanas_activas: [1,2] },
   { nombre: "Venta semanal alta → reconocer", campo: "venta_semanal", operador: ">=", valor: "10000", condicion_extra: false, accion_tipo: "celebrar", accion_mensaje: "Socia vendió ${venta_semanal} esta semana. Reconocer públicamente en grupo.", asignar_a_rol: "mentora", prioridad: "media", semanas_activas: [1,2,3,4] },
 ];
 
@@ -104,7 +104,7 @@ export default function ReglasMetodo() {
       const { data } = await supabase
         .from("retos")
         .select("*")
-        .eq("estado", "publicado")
+        .in("estado", ["activo", "publicado"])
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
