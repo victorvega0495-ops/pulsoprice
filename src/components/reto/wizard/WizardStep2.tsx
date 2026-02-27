@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import * as XLSX from "xlsx";
 import { Upload, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
 import type { RetoFormData, SociaRow } from "../RetoWizard";
 
 interface Props {
@@ -16,6 +17,10 @@ export function WizardStep2({ form, setForm }: Props) {
   const [fileName, setFileName] = useState("");
 
   const processFile = useCallback((file: File) => {
+    if (file.size > 10 * 1024 * 1024) {
+      setForm({ ...form, socias: [{ id_socia: "", nombre: "", telefono: "", tienda_visita: "", baseline_mensual: 0, error: "Archivo excede 10MB" }] });
+      return;
+    }
     setFileName(file.name);
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -26,7 +31,6 @@ export function WizardStep2({ form, setForm }: Props) {
 
         if (raw.length === 0) return;
 
-        // Normalize headers
         const headers = Object.keys(raw[0]).map((h) => h.trim().toLowerCase());
         const missing = REQUIRED_COLS.filter((c) => !headers.includes(c));
 
@@ -39,7 +43,7 @@ export function WizardStep2({ form, setForm }: Props) {
         }
 
         const seen = new Set<string>();
-        const socias: SociaRow[] = raw.map((row, i) => {
+        const socias: SociaRow[] = raw.map((row) => {
           const id = String(row.id_socia ?? row.ID_SOCIA ?? row.Id_Socia ?? "").trim();
           const nombre = String(row.nombre ?? row.NOMBRE ?? row.Nombre ?? "").trim();
           const telefono = String(row.telefono ?? row.TELEFONO ?? row.Telefono ?? "").trim();
@@ -50,10 +54,15 @@ export function WizardStep2({ form, setForm }: Props) {
           if (!id) error = "ID socia vacío";
           else if (seen.has(id)) error = "ID duplicado";
           else if (!nombre) error = "Nombre vacío";
-          else if (isNaN(baseline)) error = "Baseline no numérico";
+          else if (isNaN(baseline) || baseline < 0) error = "Baseline inválido";
 
           seen.add(id);
-          return { id_socia: id, nombre, telefono, tienda_visita: tienda, baseline_mensual: baseline, error };
+
+          const meta = form.tipo_meta === "estandar"
+            ? form.meta_estandar
+            : Math.round(baseline * 1.3);
+
+          return { id_socia: id, nombre, telefono, tienda_visita: tienda, baseline_mensual: baseline, meta_individual: meta, error };
         });
 
         setForm({ ...form, socias });
@@ -76,12 +85,17 @@ export function WizardStep2({ form, setForm }: Props) {
     if (file) processFile(file);
   }, [processFile]);
 
+  const updateMeta = (idx: number, val: number) => {
+    const next = [...form.socias];
+    next[idx] = { ...next[idx], meta_individual: val };
+    setForm({ ...form, socias: next });
+  };
+
   const validCount = form.socias.filter((s) => !s.error).length;
   const errorCount = form.socias.filter((s) => s.error).length;
 
   return (
     <div className="space-y-6">
-      {/* Drop zone */}
       <div
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
@@ -92,7 +106,7 @@ export function WizardStep2({ form, setForm }: Props) {
       >
         <Upload className="mb-3 h-10 w-10 text-muted-foreground" />
         <p className="mb-1 text-sm font-medium">Arrastra tu archivo Excel aquí</p>
-        <p className="text-xs text-muted-foreground">o haz click para seleccionar (.xlsx)</p>
+        <p className="text-xs text-muted-foreground">o haz click para seleccionar (.xlsx, máx 10MB)</p>
         <input
           type="file"
           accept=".xlsx,.xls"
@@ -107,7 +121,6 @@ export function WizardStep2({ form, setForm }: Props) {
         </p>
       )}
 
-      {/* Stats */}
       {form.socias.length > 0 && (
         <div className="flex gap-4">
           <div className="flex items-center gap-2 text-sm">
@@ -117,13 +130,12 @@ export function WizardStep2({ form, setForm }: Props) {
           {errorCount > 0 && (
             <div className="flex items-center gap-2 text-sm text-destructive">
               <AlertTriangle className="h-4 w-4" />
-              <span>{errorCount} errores</span>
+              <span>{errorCount} con errores (se excluirán)</span>
             </div>
           )}
         </div>
       )}
 
-      {/* Preview table */}
       {form.socias.length > 0 && (
         <div className="max-h-80 overflow-auto rounded-lg border">
           <Table>
@@ -135,11 +147,12 @@ export function WizardStep2({ form, setForm }: Props) {
                 <TableHead>Teléfono</TableHead>
                 <TableHead>Tienda</TableHead>
                 <TableHead>Baseline</TableHead>
+                <TableHead>Meta</TableHead>
                 <TableHead>Estado</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {form.socias.slice(0, 20).map((s, i) => (
+              {form.socias.slice(0, 30).map((s, i) => (
                 <TableRow key={i} className={s.error ? "bg-destructive/10" : ""}>
                   <TableCell className="text-muted-foreground">{i + 1}</TableCell>
                   <TableCell>{s.id_socia}</TableCell>
@@ -147,6 +160,18 @@ export function WizardStep2({ form, setForm }: Props) {
                   <TableCell>{s.telefono}</TableCell>
                   <TableCell>{s.tienda_visita}</TableCell>
                   <TableCell>${s.baseline_mensual.toLocaleString()}</TableCell>
+                  <TableCell>
+                    {!s.error && form.tipo_meta === "personalizada" ? (
+                      <Input
+                        type="number"
+                        className="h-7 w-24"
+                        value={s.meta_individual ?? 0}
+                        onChange={(e) => updateMeta(i, Number(e.target.value))}
+                      />
+                    ) : (
+                      `$${(s.meta_individual ?? form.meta_estandar).toLocaleString()}`
+                    )}
+                  </TableCell>
                   <TableCell>
                     {s.error ? (
                       <span className="text-xs text-destructive">{s.error}</span>
@@ -158,9 +183,9 @@ export function WizardStep2({ form, setForm }: Props) {
               ))}
             </TableBody>
           </Table>
-          {form.socias.length > 20 && (
+          {form.socias.length > 30 && (
             <p className="p-3 text-center text-xs text-muted-foreground">
-              Mostrando 20 de {form.socias.length} filas
+              Mostrando 30 de {form.socias.length} filas
             </p>
           )}
         </div>

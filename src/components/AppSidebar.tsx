@@ -42,7 +42,7 @@ function getNavItems(rol: string): NavItem[] {
         { title: "Pipeline", url: "/pipeline", icon: GitBranch },
         { title: "Reglas del Método", url: "/reglas", icon: BookOpen },
         { title: "Equipo", url: "/equipo", icon: Users },
-        { title: "Gestión de Retos", url: "/retos", icon: Trophy },
+        { title: "Gestión de Retos", url: "/gestion-retos", icon: Trophy },
         { title: "Centro IA", url: "/centro-ia", icon: Bot },
       ];
     case "coordinador":

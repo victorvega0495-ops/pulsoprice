@@ -45,14 +45,14 @@ export function WizardStep3({ form, setForm }: Props) {
 
   const validSocias = form.socias.filter((s) => !s.error);
 
-  const autoAssignCoordinadores = () => {
-    if (coordinadores.length === 0) return;
+  const autoAssign = (field: "coordinador_id" | "desarrolladora_id", users: any[]) => {
+    if (users.length === 0) return;
     const tiendas = [...new Set(validSocias.map((s) => s.tienda_visita))];
     const updated = [...form.socias];
     let idx = 0;
     tiendas.forEach((tienda) => {
       updated.filter((s) => s.tienda_visita === tienda && !s.error).forEach((s) => {
-        s.operador_id = coordinadores[idx % coordinadores.length].id;
+        (s as any)[field] = users[idx % users.length].id;
       });
       idx++;
     });
@@ -68,65 +68,37 @@ export function WizardStep3({ form, setForm }: Props) {
     setForm({ ...form, socias: updated });
   };
 
-  const countByCoord = (id: string) => form.socias.filter((s) => s.operador_id === id && !s.error).length;
-  const countByMentora = (id: string) => form.socias.filter((s) => s.mentora_id === id && !s.error).length;
-  const sinCoordinador = validSocias.filter((s) => !s.operador_id).length;
+  const countBy = (field: string, id: string) =>
+    form.socias.filter((s) => !s.error && (s as any)[field] === id).length;
+
+  const sinCoordinador = validSocias.filter((s) => !s.coordinador_id).length;
+  const sinDesarrolladora = validSocias.filter((s) => !s.desarrolladora_id).length;
   const sinMentora = validSocias.filter((s) => !s.mentora_id).length;
 
   return (
     <div className="space-y-8">
       {/* Coordinadores */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold">Coordinadores</h3>
-          <Button variant="outline" size="sm" onClick={autoAssignCoordinadores} disabled={coordinadores.length === 0}>
-            <Shuffle className="mr-2 h-4 w-4" />
-            Asignar automáticamente
-          </Button>
-        </div>
+      <Section
+        title="Coordinadores"
+        users={coordinadores}
+        emptyMsg="No hay coordinadores activos"
+        countFn={(id) => countBy("coordinador_id", id)}
+        sinAsignar={sinCoordinador}
+        sinLabel="socias sin coordinador"
+        onAutoAssign={() => autoAssign("coordinador_id", coordinadores)}
+      />
 
-        {coordinadores.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No hay coordinadores activos</p>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {coordinadores.map((op: any) => (
-              <div key={op.id} className="flex items-center justify-between rounded-lg border p-3">
-                <div>
-                  <p className="text-sm font-medium">{op.nombre}</p>
-                  <p className="text-xs text-muted-foreground">{op.email}</p>
-                </div>
-                <Badge variant="outline">{countByCoord(op.id)} socias</Badge>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {sinCoordinador > 0 && (
-          <div className="flex items-center gap-2 text-sm text-yellow-400">
-            <AlertTriangle className="h-4 w-4" />
-            {sinCoordinador} socias sin coordinador asignado
-          </div>
-        )}
-      </div>
-
-      {/* Desarrolladoras info */}
-      {desarrolladoras.length > 0 && (
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold">Desarrolladoras disponibles</h3>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {desarrolladoras.map((d: any) => (
-              <div key={d.id} className="flex items-center justify-between rounded-lg border p-3">
-                <div>
-                  <p className="text-sm font-medium">{d.nombre}</p>
-                  <p className="text-xs text-muted-foreground">{d.email}</p>
-                </div>
-                <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/30">Desarrolladora</Badge>
-              </div>
-            ))}
-          </div>
-          <p className="text-xs text-muted-foreground">Las desarrolladoras se asignan después de publicar el reto</p>
-        </div>
-      )}
+      {/* Desarrolladoras */}
+      <Section
+        title="Desarrolladoras"
+        users={desarrolladoras}
+        emptyMsg="No hay desarrolladoras activas"
+        countFn={(id) => countBy("desarrolladora_id", id)}
+        sinAsignar={sinDesarrolladora}
+        sinLabel="socias sin desarrolladora"
+        onAutoAssign={() => autoAssign("desarrolladora_id", desarrolladoras)}
+        badgeClass="bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+      />
 
       {/* Mentoras */}
       <div className="space-y-4">
@@ -142,23 +114,25 @@ export function WizardStep3({ form, setForm }: Props) {
           <p className="text-sm text-muted-foreground">No hay mentoras activas</p>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {mentoras.map((m: any) => (
-              <div key={m.id} className="flex items-center justify-between rounded-lg border p-3">
-                <div>
-                  <p className="text-sm font-medium">{m.nombre}</p>
-                  <p className="text-xs text-muted-foreground">{m.telefono}</p>
+            {mentoras.map((m: any) => {
+              const count = countBy("mentora_id", m.id);
+              return (
+                <div key={m.id} className="flex items-center justify-between rounded-lg border p-3">
+                  <div>
+                    <p className="text-sm font-medium">{m.nombre}</p>
+                    <p className="text-xs text-muted-foreground">{m.telefono}</p>
+                  </div>
+                  <Badge variant="outline" className={count > 15 ? "border-destructive text-destructive" : ""}>
+                    {count} socias
+                  </Badge>
                 </div>
-                <Badge variant="outline">{countByMentora(m.id)} socias</Badge>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
         {sinMentora > 0 && (
-          <div className="flex items-center gap-2 text-sm text-yellow-400">
-            <AlertTriangle className="h-4 w-4" />
-            {sinMentora} socias sin mentora asignada
-          </div>
+          <Warning count={sinMentora} label="socias sin mentora asignada" />
         )}
 
         {mentoras.length > 0 && (
@@ -167,6 +141,56 @@ export function WizardStep3({ form, setForm }: Props) {
           </p>
         )}
       </div>
+    </div>
+  );
+}
+
+function Section({ title, users, emptyMsg, countFn, sinAsignar, sinLabel, onAutoAssign, badgeClass }: {
+  title: string;
+  users: any[];
+  emptyMsg: string;
+  countFn: (id: string) => number;
+  sinAsignar: number;
+  sinLabel: string;
+  onAutoAssign: () => void;
+  badgeClass?: string;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold">{title}</h3>
+        <Button variant="outline" size="sm" onClick={onAutoAssign} disabled={users.length === 0}>
+          <Shuffle className="mr-2 h-4 w-4" />
+          Asignar automáticamente
+        </Button>
+      </div>
+
+      {users.length === 0 ? (
+        <p className="text-sm text-muted-foreground">{emptyMsg}</p>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {users.map((u: any) => (
+            <div key={u.id} className="flex items-center justify-between rounded-lg border p-3">
+              <div>
+                <p className="text-sm font-medium">{u.nombre}</p>
+                <p className="text-xs text-muted-foreground">{u.email}</p>
+              </div>
+              <Badge variant="outline" className={badgeClass}>{countFn(u.id)} socias</Badge>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {sinAsignar > 0 && <Warning count={sinAsignar} label={sinLabel} />}
+    </div>
+  );
+}
+
+function Warning({ count, label }: { count: number; label: string }) {
+  return (
+    <div className="flex items-center gap-2 text-sm text-yellow-400">
+      <AlertTriangle className="h-4 w-4" />
+      {count} {label}
     </div>
   );
 }
