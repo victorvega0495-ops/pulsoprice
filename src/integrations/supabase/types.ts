@@ -602,6 +602,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      fn_validar_transicion_estado: {
+        Args: { p_nuevo_estado: string; p_socia_reto_id: string }
+        Returns: boolean
+      }
       is_director_or_gerente: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
