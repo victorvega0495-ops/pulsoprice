@@ -125,18 +125,8 @@ export default function GestionRetos() {
 
   const handleDelete = async () => {
     if (!deleteReto) return;
-    // Cascade delete related data - all dependent tables
-    await supabase.from("acciones_operativas").delete().eq("reto_id", deleteReto.id);
-    await supabase.from("ventas_diarias").delete().eq("reto_id", deleteReto.id);
-    await supabase.from("cargas_ventas").delete().eq("reto_id", deleteReto.id);
-    await supabase.from("alertas").delete().eq("reto_id", deleteReto.id);
-    await supabase.from("reglas_metodo").delete().eq("reto_id", deleteReto.id);
-    await supabase.from("metas_diarias_reto").delete().eq("reto_id", deleteReto.id);
-    await supabase.from("score_mentoras").delete().eq("reto_id", deleteReto.id);
-    await supabase.from("compromisos_mentora").delete().eq("reto_id", deleteReto.id);
-    await supabase.from("socias_reto").delete().eq("reto_id", deleteReto.id);
-    const { error } = await supabase.from("retos").delete().eq("id", deleteReto.id);
-    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    const { error } = await supabase.rpc("delete_reto_cascade", { p_reto_id: deleteReto.id });
+    if (error) { toast({ title: "Error al eliminar", description: error.message, variant: "destructive" }); return; }
     toast({ title: "Reto eliminado permanentemente" });
     queryClient.invalidateQueries({ queryKey: ["todos-retos"] });
     setDeleteReto(null);
