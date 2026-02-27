@@ -1296,6 +1296,7 @@ export type Database = {
       }
     }
     Functions: {
+      delete_reto_cascade: { Args: { p_reto_id: string }; Returns: undefined }
       fn_validar_transicion_estado:
         | {
             Args: {
