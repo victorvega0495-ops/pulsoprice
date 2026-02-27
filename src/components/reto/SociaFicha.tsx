@@ -39,6 +39,7 @@ const estadoConfig: Record<string, { color: string; bg: string; label: string }>
   activa: { color: "text-emerald-400", bg: "bg-emerald-500/20", label: "Activa" },
   en_riesgo: { color: "text-yellow-400", bg: "bg-yellow-500/20", label: "En Riesgo" },
   inactiva: { color: "text-red-400", bg: "bg-red-500/20", label: "Inactiva" },
+  graduada: { color: "text-blue-400", bg: "bg-blue-500/20", label: "Graduada" },
 };
 
 const gradConfig: Record<string, string> = {

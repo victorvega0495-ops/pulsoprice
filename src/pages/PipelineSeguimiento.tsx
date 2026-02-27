@@ -37,7 +37,6 @@ export default function PipelineSeguimiento() {
   const [moveModal, setMoveModal] = useState<{ socia: any; targetFase: string } | null>(null);
   const [moveRazon, setMoveRazon] = useState("");
   const [draggedSocia, setDraggedSocia] = useState<any>(null);
-  const [simulando, setSimulando] = useState(false);
   const [filterReto, setFilterReto] = useState("todos");
 
   const isManager = profile?.rol === "director" || profile?.rol === "gerente";
@@ -115,49 +114,6 @@ export default function PipelineSeguimiento() {
     setDraggedSocia(null);
   };
 
-  // Simulate graduations
-  const handleSimular = async () => {
-    if (!user) return;
-    setSimulando(true);
-    try {
-      const { data: retoActivo } = await supabase
-        .from("retos").select("id").eq("estado", "publicado").limit(1).single();
-      if (!retoActivo) { toast({ title: "Sin reto activo", variant: "destructive" }); return; }
-
-      const { data: sociasList } = await supabase
-        .from("socias_reto").select("id").eq("reto_id", retoActivo.id).eq("estado", "activa").limit(10);
-      if (!sociasList?.length) {
-        // Try inscrita
-        const { data: s2 } = await supabase.from("socias_reto").select("id").eq("reto_id", retoActivo.id).limit(10);
-        if (!s2?.length) { toast({ title: "Sin socias disponibles", variant: "destructive" }); return; }
-        for (const s of s2) {
-          const fasesKeys = FASES.map(f => f.key);
-          const randomFase = fasesKeys[Math.floor(Math.random() * fasesKeys.length)];
-          const randomG = (["G1", "G2", "G3"] as const)[Math.floor(Math.random() * 3)];
-          await supabase.from("socias_reto").update({
-            estado: "graduada" as any, fase_seguimiento: randomFase, graduacion_probable: randomG,
-          }).eq("id", s.id);
-        }
-      } else {
-        for (const s of sociasList) {
-          const fasesKeys = FASES.map(f => f.key);
-          const randomFase = fasesKeys[Math.floor(Math.random() * fasesKeys.length)];
-          const randomG = (["G1", "G2", "G3"] as const)[Math.floor(Math.random() * 3)];
-          await supabase.from("socias_reto").update({
-            estado: "graduada" as any, fase_seguimiento: randomFase, graduacion_probable: randomG,
-          }).eq("id", s.id);
-        }
-      }
-
-      queryClient.invalidateQueries({ queryKey: ["pipeline-graduadas"] });
-      queryClient.invalidateQueries({ queryKey: ["socias-reto"] });
-      toast({ title: "Simulación completada", description: "10 socias graduadas con fases aleatorias." });
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
-    } finally {
-      setSimulando(false);
-    }
-  };
 
   if (isLoading) {
     return (
@@ -175,12 +131,6 @@ export default function PipelineSeguimiento() {
           <h1 className="text-2xl font-bold tracking-tight">Pipeline de Seguimiento</h1>
           <p className="text-sm text-muted-foreground">Gestión post-reto de socias graduadas</p>
         </div>
-        {isManager && (
-          <Button variant="outline" size="sm" onClick={handleSimular} disabled={simulando}>
-            {simulando ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Wand2 className="mr-1.5 h-3.5 w-3.5" />}
-            Simular graduación de 10 socias
-          </Button>
-        )}
       </div>
 
       {/* KPIs */}

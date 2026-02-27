@@ -230,7 +230,8 @@ export function RetoPanel({ reto, onRefresh }: Props) {
         });
 
         const pctAvanceSocia = socia.meta_individual > 0 ? (ventaAcum / socia.meta_individual) * 100 : 0;
-        const nuevoEstado = delta > 0 ? "activa" : (socia.dias_sin_compra >= 3 ? "inactiva" : (socia.dias_sin_compra >= 1 ? "en_riesgo" : socia.estado));
+        const diasSinCompraActual = delta > 0 ? 0 : socia.dias_sin_compra + 1;
+        const nuevoEstado = delta > 0 ? "activa" : (diasSinCompraActual >= 7 ? "inactiva" : (diasSinCompraActual >= 3 ? "en_riesgo" : socia.estado));
         const graduacion = pctAvanceSocia >= 100 ? "G1" : (pctAvanceSocia >= 70 ? "G2" : "G3");
 
         const { error: updateErr } = await supabase.from("socias_reto").update({
@@ -473,6 +474,7 @@ export function RetoPanel({ reto, onRefresh }: Props) {
     activa: "text-emerald-400",
     en_riesgo: "text-yellow-400",
     inactiva: "text-destructive",
+    graduada: "text-blue-400",
   };
 
   const gradColor: Record<string, string> = {
@@ -674,7 +676,8 @@ export function RetoPanel({ reto, onRefresh }: Props) {
                         <span className={`h-2 w-2 rounded-full ${
                           s.estado === "activa" ? "bg-emerald-400" :
                           s.estado === "en_riesgo" ? "bg-yellow-400" :
-                          s.estado === "inactiva" ? "bg-red-400" : "bg-muted-foreground/40"
+                          s.estado === "inactiva" ? "bg-red-400" :
+                          s.estado === "graduada" ? "bg-blue-400" : "bg-muted-foreground/40"
                         }`} />
                         {s.estado}
                       </span>
