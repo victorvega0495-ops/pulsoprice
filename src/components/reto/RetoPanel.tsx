@@ -108,7 +108,7 @@ export function RetoPanel({ reto, onRefresh }: Props) {
         .from("metas_diarias_reto")
         .select("*")
         .eq("reto_id", reto.id)
-        .order("dia_numero");
+        .order("fecha");
       if (error) throw error;
       return data || [];
     },
@@ -202,7 +202,10 @@ export function RetoPanel({ reto, onRefresh }: Props) {
 
   const chartData = metasDiarias
     .filter((m: any) => activeChartWeek === 0 || m.semana === activeChartWeek)
-    .sort((a: any, b: any) => a.dia_numero - b.dia_numero)
+    .sort((a: any, b: any) => {
+      if (a.fecha && b.fecha) return a.fecha.localeCompare(b.fecha);
+      return a.dia_numero - b.dia_numero;
+    })
     .map((m: any) => {
       const fecha = m.fecha ? format(parseISO(m.fecha), "d MMM", { locale: es }) : `D${m.dia_numero}`;
       const isPast = m.fecha ? parseISO(m.fecha) <= today : false;
