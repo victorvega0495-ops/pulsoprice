@@ -29,8 +29,10 @@ export default function RetoActivo() {
   });
 
   const retoActivo = selectedRetoId === "auto"
-    ? (retosDisponibles.find((r: any) => r.estado === "activo") || retosDisponibles[0] || null)
+    ? (retosDisponibles.find((r: any) => r.estado === "activo" && (r as any).tipo_reto !== "seguimiento") || retosDisponibles.find((r: any) => r.estado === "activo") || retosDisponibles[0] || null)
     : retosDisponibles.find((r: any) => r.id === selectedRetoId) || null;
+
+  const tipoLabel = (r: any) => (r as any).tipo_reto === "seguimiento" ? "Seguimiento" : "Operación";
 
   if (isLoading) {
     return (
@@ -69,10 +71,10 @@ export default function RetoActivo() {
             <SelectValue placeholder="Seleccionar reto" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="auto">Reto activo más reciente</SelectItem>
+            <SelectItem value="auto">Reto de operación activo más reciente</SelectItem>
             {retosDisponibles.map((r: any) => (
               <SelectItem key={r.id} value={r.id}>
-                {r.nombre} ({r.estado})
+                {r.nombre} ({tipoLabel(r)})
               </SelectItem>
             ))}
           </SelectContent>

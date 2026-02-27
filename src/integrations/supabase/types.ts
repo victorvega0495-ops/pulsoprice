@@ -762,6 +762,7 @@ export type Database = {
           pesos_semanales: Json
           tiendas: string[] | null
           tipo_meta: string
+          tipo_reto: string
           updated_at: string
         }
         Insert: {
@@ -777,6 +778,7 @@ export type Database = {
           pesos_semanales?: Json
           tiendas?: string[] | null
           tipo_meta?: string
+          tipo_reto?: string
           updated_at?: string
         }
         Update: {
@@ -792,6 +794,7 @@ export type Database = {
           pesos_semanales?: Json
           tiendas?: string[] | null
           tipo_meta?: string
+          tipo_reto?: string
           updated_at?: string
         }
         Relationships: []

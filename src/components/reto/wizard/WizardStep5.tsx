@@ -68,6 +68,7 @@ export function WizardStep5({ form, onPublished }: Props) {
           fecha_fin: format(form.fecha_fin, "yyyy-MM-dd"),
           meta_estandar: form.meta_estandar,
           tipo_meta: form.tipo_meta,
+          tipo_reto: form.tipo_reto || "operacion",
           estado: "publicado" as any,
           pesos_semanales: form.pesos_semanales,
           pesos_diarios: form.pesos_diarios,

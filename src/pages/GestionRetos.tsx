@@ -84,7 +84,7 @@ export default function GestionRetos() {
     },
   });
 
-  const hayActivo = retos.some((r) => r.estado === "activo");
+  // Removed single-active restriction
 
   const openEdit = (r: any) => {
     setEditReto(r);
@@ -146,6 +146,7 @@ export default function GestionRetos() {
       fecha_fin: r.fecha_fin,
       meta_estandar: r.meta_estandar,
       tipo_meta: r.tipo_meta,
+      tipo_reto: (r as any).tipo_reto || "operacion",
       pesos_semanales: r.pesos_semanales,
       pesos_diarios: r.pesos_diarios,
       tiendas: r.tiendas,
@@ -188,18 +189,13 @@ export default function GestionRetos() {
         </Button>
       </div>
 
-      {hayActivo && (
-        <div className="flex items-center gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 text-sm text-yellow-400">
-          <AlertTriangle className="h-4 w-4 shrink-0" />
-          Ya hay un reto en estado "activo". Solo puede haber uno a la vez.
-        </div>
-      )}
 
       <div className="rounded-lg border">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Nombre</TableHead>
+              <TableHead>Tipo</TableHead>
               <TableHead>Fechas</TableHead>
               <TableHead>Estado</TableHead>
               <TableHead className="text-right"># Socias</TableHead>
@@ -210,7 +206,7 @@ export default function GestionRetos() {
           <TableBody>
             {retos.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground py-12">No hay retos creados aún</TableCell>
+                <TableCell colSpan={7} className="text-center text-muted-foreground py-12">No hay retos creados aún</TableCell>
               </TableRow>
             ) : (
               retos.map((r) => {
@@ -221,6 +217,11 @@ export default function GestionRetos() {
                 return (
                   <TableRow key={r.id} className="cursor-pointer hover:bg-accent/50" onClick={() => navigate("/reto-activo")}>
                     <TableCell className="font-medium">{r.nombre}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={(r as any).tipo_reto === "seguimiento" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : "bg-blue-500/20 text-blue-400 border-blue-500/30"}>
+                        {(r as any).tipo_reto === "seguimiento" ? "Seguimiento" : "Operación"}
+                      </Badge>
+                    </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {format(new Date(r.fecha_inicio), "d MMM", { locale: es })} — {format(new Date(r.fecha_fin), "d MMM yyyy", { locale: es })}
                     </TableCell>
