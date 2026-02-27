@@ -175,7 +175,7 @@ export function RetoPanel({ reto, onRefresh }: Props) {
       const data: any = await new Promise((resolve, reject) => {
         reader.onload = (e) => {
           try {
-            const wb = XLSX.read(e.target?.result, { type: "binary" });
+            const wb = XLSX.read(e.target?.result, { type: "binary", cellDates: true });
             const ws = wb.Sheets[wb.SheetNames[0]];
             resolve(XLSX.utils.sheet_to_json(ws, { defval: "" }));
           } catch (err) { reject(err); }
@@ -183,20 +183,27 @@ export function RetoPanel({ reto, onRefresh }: Props) {
         reader.readAsBinaryString(file);
       });
 
-      // Determine the fecha: read from Excel rows or use today
-      // Try to get fecha from Excel data (first row)
+      // Determine the fecha from each row — use first row to get date for the carga record
       const firstRow = data[0] || {};
-      let fechaExcel = String(firstRow.fecha ?? firstRow.FECHA ?? "").trim();
-      let fechaHoy: string;
-      if (fechaExcel && /^\d{4}-\d{2}-\d{2}$/.test(fechaExcel)) {
-        fechaHoy = fechaExcel;
-      } else if (fechaExcel && /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(fechaExcel)) {
-        // Handle dd/mm/yyyy format
-        const parts = fechaExcel.split("/");
-        fechaHoy = `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
-      } else {
-        fechaHoy = format(today, "yyyy-MM-dd");
-      }
+      const parseFecha = (raw: any): string => {
+        if (raw == null || raw === "") return format(today, "yyyy-MM-dd");
+        // XLSX may parse dates as JS Date objects or serial numbers
+        if (raw instanceof Date) return format(raw, "yyyy-MM-dd");
+        if (typeof raw === "number") {
+          // Excel serial date number
+          const d = new Date((raw - 25569) * 86400 * 1000);
+          return format(d, "yyyy-MM-dd");
+        }
+        const s = String(raw).trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+        if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) {
+          const parts = s.split("/");
+          return `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`;
+        }
+        return format(today, "yyyy-MM-dd");
+      };
+      const fechaRaw = firstRow.fecha ?? firstRow.FECHA ?? firstRow.Fecha ?? "";
+      const fechaHoy = parseFecha(fechaRaw);
       console.log(`[DEBUG] Fecha de carga determinada: ${fechaHoy}`);
       let ventaTotalDia = 0;
       let alertas = 0;
@@ -211,21 +218,41 @@ export function RetoPanel({ reto, onRefresh }: Props) {
         .select().single();
       if (cargaErr) throw cargaErr;
 
+      // Auto-transition: publicado → activo on first upload
+      if (reto.estado === "publicado") {
+        const { error: transErr } = await supabase.from("retos").update({ estado: "activo" as any }).eq("id", reto.id);
+        if (transErr) console.error("[DEBUG] Error transitioning reto to activo:", transErr);
+        else {
+          console.log("[DEBUG] Reto transitioned to activo");
+          onRefresh();
+        }
+      }
+
       setUploadProgress({ current: 0, total: data.length });
 
       for (const row of data) {
-        const idSocia = String(row.id_socia ?? row.ID_SOCIA ?? "").trim();
-        const ventaAcum = Number(row.venta_acumulada ?? row.VENTA_ACUMULADA ?? 0);
-        if (!idSocia) { setUploadProgress(p => ({ ...p, current: p.current + 1 })); continue; }
+        const idSocia = String(row.id_socia ?? row.ID_SOCIA ?? row.Id_Socia ?? "").trim();
+        const ventaAcum = Number(row.venta_acumulada ?? row.VENTA_ACUMULADA ?? row.Venta_Acumulada ?? 0);
+        if (!idSocia || isNaN(ventaAcum) || ventaAcum < 0) { setUploadProgress(p => ({ ...p, current: p.current + 1 })); continue; }
 
         const socia = socias.find((s: any) => s.id_socia === idSocia);
         if (!socia) { alertas++; setUploadProgress(p => ({ ...p, current: p.current + 1 })); continue; }
 
-        const delta = Math.max(0, ventaAcum - Number(socia.venta_acumulada || 0));
+        // Get previous venta_acumulada from ventas_diarias (most recent) or socias_reto
+        const { data: prevVenta } = await supabase
+          .from("ventas_diarias")
+          .select("venta_acumulada")
+          .eq("reto_id", reto.id)
+          .eq("socia_reto_id", socia.id)
+          .order("fecha", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        const prevAcum = prevVenta ? Number(prevVenta.venta_acumulada) : 0;
+        const delta = Math.max(0, ventaAcum - prevAcum);
         ventaTotalDia += delta;
 
         await supabase.from("ventas_diarias").insert({
-          reto_id: reto.id, socia_reto_id: socia.id, fecha: fechaHoy,
+          reto_id: reto.id, socia_reto_id: socia.id, id_socia: idSocia, fecha: fechaHoy,
           venta_acumulada: ventaAcum, delta_diario: delta, carga_id: carga.id,
         });
 

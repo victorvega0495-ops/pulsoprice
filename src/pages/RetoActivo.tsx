@@ -17,7 +17,7 @@ export default function RetoActivo() {
       const { data, error } = await supabase
         .from("retos")
         .select("*")
-        .eq("estado", "publicado")
+        .in("estado", ["publicado", "activo"])
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
