@@ -1,13 +1,16 @@
-import { format, addDays } from "date-fns";
+import { format, addDays, differenceInDays } from "date-fns";
 import { es } from "date-fns/locale";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Badge } from "@/components/ui/badge";
 import type { RetoFormData } from "../RetoWizard";
 
 interface Props {
@@ -16,6 +19,46 @@ interface Props {
 }
 
 export function WizardStep1({ form, setForm }: Props) {
+  const { data: retosActivos = [] } = useQuery({
+    queryKey: ["retos-activos-overlap"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("retos")
+        .select("id, nombre, fecha_inicio, fecha_fin, estado")
+        .in("estado", ["activo", "publicado"]);
+      return data || [];
+    },
+  });
+
+  const { data: tiendasDisponibles = [] } = useQuery({
+    queryKey: ["tiendas-disponibles"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("socias_reto")
+        .select("tienda_visita");
+      if (!data) return [];
+      const unique = [...new Set(data.map((s) => s.tienda_visita).filter(Boolean))];
+      return unique.sort() as string[];
+    },
+  });
+
+  const diffDays = form.fecha_inicio && form.fecha_fin
+    ? differenceInDays(form.fecha_fin, form.fecha_inicio)
+    : 0;
+
+  const hasOverlap = form.fecha_inicio && form.fecha_fin && retosActivos.some((r) => {
+    const rStart = new Date(r.fecha_inicio);
+    const rEnd = new Date(r.fecha_fin);
+    return form.fecha_inicio! <= rEnd && form.fecha_fin! >= rStart;
+  });
+
+  const toggleTienda = (t: string) => {
+    const next = form.tiendas.includes(t)
+      ? form.tiendas.filter((x) => x !== t)
+      : [...form.tiendas, t];
+    setForm({ ...form, tiendas: next });
+  };
+
   return (
     <div className="space-y-6 max-w-lg">
       <div className="space-y-2">
@@ -66,7 +109,7 @@ export function WizardStep1({ form, setForm }: Props) {
                 selected={form.fecha_fin}
                 onSelect={(d) => setForm({ ...form, fecha_fin: d })}
                 disabled={(date) =>
-                  form.fecha_inicio ? date <= form.fecha_inicio : false
+                  form.fecha_inicio ? date < addDays(form.fecha_inicio, 28) : false
                 }
                 className="p-3 pointer-events-auto"
               />
@@ -74,6 +117,45 @@ export function WizardStep1({ form, setForm }: Props) {
           </Popover>
         </div>
       </div>
+
+      {form.fecha_inicio && form.fecha_fin && diffDays < 28 && (
+        <div className="flex items-center gap-2 text-sm text-destructive">
+          <AlertTriangle className="h-4 w-4" />
+          Mínimo 28 días entre inicio y fin (actual: {diffDays} días)
+        </div>
+      )}
+
+      {hasOverlap && (
+        <div className="flex items-center gap-2 text-sm text-destructive">
+          <AlertTriangle className="h-4 w-4" />
+          Las fechas se solapan con un reto activo/publicado
+        </div>
+      )}
+
+      {form.fecha_inicio && form.fecha_fin && diffDays >= 28 && (
+        <p className="text-sm text-muted-foreground">Duración: {diffDays} días ({Math.ceil(diffDays / 7)} semanas)</p>
+      )}
+
+      {tiendasDisponibles.length > 0 && (
+        <div className="space-y-2">
+          <Label>Tiendas participantes</Label>
+          <div className="flex flex-wrap gap-2">
+            {tiendasDisponibles.map((t) => (
+              <Badge
+                key={t}
+                variant={form.tiendas.includes(t) ? "default" : "outline"}
+                className="cursor-pointer"
+                onClick={() => toggleTienda(t)}
+              >
+                {t}
+              </Badge>
+            ))}
+          </div>
+          {form.tiendas.length > 0 && (
+            <p className="text-xs text-muted-foreground">{form.tiendas.length} tiendas seleccionadas</p>
+          )}
+        </div>
+      )}
 
       <div className="space-y-2">
         <Label>Meta estándar ($)</Label>

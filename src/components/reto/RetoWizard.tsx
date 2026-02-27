@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, Check } from "lucide-react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import { WizardStep1 } from "./wizard/WizardStep1";
 import { WizardStep2 } from "./wizard/WizardStep2";
 import { WizardStep3 } from "./wizard/WizardStep3";
@@ -13,7 +13,10 @@ export interface SociaRow {
   telefono: string;
   tienda_visita: string;
   baseline_mensual: number;
+  meta_individual?: number;
   operador_id?: string;
+  coordinador_id?: string;
+  desarrolladora_id?: string;
   mentora_id?: string;
   error?: string;
 }
@@ -24,8 +27,12 @@ export interface RetoFormData {
   fecha_fin: Date | undefined;
   meta_estandar: number;
   tipo_meta: "estandar" | "personalizada";
+  tiendas: string[];
   socias: SociaRow[];
   pesos_semanales: number[];
+  pesos_diarios: number[];
+  duplicar_reglas: boolean;
+  reglas_reto_origen_id?: string;
 }
 
 const stepLabels = ["Datos básicos", "Socias", "Equipo", "Método", "Publicar"];
@@ -43,20 +50,30 @@ export function RetoWizard({ onClose, onPublished }: Props) {
     fecha_fin: undefined,
     meta_estandar: 38000,
     tipo_meta: "estandar",
+    tiendas: [],
     socias: [],
     pesos_semanales: [15, 25, 30, 30],
+    pesos_diarios: [15, 15, 15, 15, 20, 15, 5],
+    duplicar_reglas: false,
   });
 
   const canNext = (): boolean => {
     switch (step) {
-      case 0:
-        return !!(form.nombre && form.fecha_inicio && form.fecha_fin);
+      case 0: {
+        if (!form.nombre || !form.fecha_inicio || !form.fecha_fin) return false;
+        const diffMs = form.fecha_fin.getTime() - form.fecha_inicio.getTime();
+        const diffDays = diffMs / (1000 * 60 * 60 * 24);
+        return diffDays >= 28;
+      }
       case 1:
         return form.socias.filter((s) => !s.error).length > 0;
       case 2:
-        return true;
+        return true; // warnings shown but not blocking
       case 3:
-        return form.pesos_semanales.reduce((a, b) => a + b, 0) === 100;
+        return (
+          form.pesos_semanales.reduce((a, b) => a + b, 0) === 100 &&
+          form.pesos_diarios.reduce((a, b) => a + b, 0) === 100
+        );
       default:
         return true;
     }
@@ -64,7 +81,6 @@ export function RetoWizard({ onClose, onPublished }: Props) {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Crear Nuevo Reto</h1>
@@ -73,7 +89,6 @@ export function RetoWizard({ onClose, onPublished }: Props) {
         <Button variant="outline" onClick={onClose}>Cancelar</Button>
       </div>
 
-      {/* Progress */}
       <div className="flex gap-1">
         {stepLabels.map((label, i) => (
           <div key={i} className="flex-1">
@@ -87,7 +102,6 @@ export function RetoWizard({ onClose, onPublished }: Props) {
         ))}
       </div>
 
-      {/* Content */}
       <div className="rounded-lg border bg-card p-6">
         {step === 0 && <WizardStep1 form={form} setForm={setForm} />}
         {step === 1 && <WizardStep2 form={form} setForm={setForm} />}
@@ -96,7 +110,6 @@ export function RetoWizard({ onClose, onPublished }: Props) {
         {step === 4 && <WizardStep5 form={form} onPublished={onPublished} />}
       </div>
 
-      {/* Navigation */}
       <div className="flex justify-between">
         <Button variant="outline" onClick={() => step > 0 ? setStep(step - 1) : onClose()}>
           <ArrowLeft className="mr-2 h-4 w-4" />

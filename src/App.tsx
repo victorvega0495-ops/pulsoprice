@@ -16,6 +16,8 @@ import PipelineSeguimiento from "./pages/PipelineSeguimiento";
 import DashboardOperativo from "./pages/DashboardOperativo";
 import DashboardEjecutivo from "./pages/DashboardEjecutivo";
 import ReglasMetodo from "./pages/ReglasMetodo";
+import GestionRetos from "./pages/GestionRetos";
+import NuevoReto from "./pages/NuevoReto";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -66,7 +68,8 @@ const App = () => (
             <Route path="/setup" element={<Setup />} />
             <Route path="/" element={<ProtectedRoute><DefaultRedirect /></ProtectedRoute>} />
             <Route path="/dashboard" element={<ProtectedRoute><AppLayout><DashboardEjecutivo /></AppLayout></ProtectedRoute>} />
-            <Route path="/retos" element={<LayoutRoute />} />
+            <Route path="/gestion-retos" element={<ProtectedRoute><AppLayout><GestionRetos /></AppLayout></ProtectedRoute>} />
+            <Route path="/nuevo-reto" element={<ProtectedRoute><AppLayout><NuevoReto /></AppLayout></ProtectedRoute>} />
             <Route path="/equipo" element={<ProtectedRoute><AppLayout><Equipo /></AppLayout></ProtectedRoute>} />
             <Route path="/dashboard-operativo" element={<ProtectedRoute><AppLayout><DashboardOperativo /></AppLayout></ProtectedRoute>} />
             <Route path="/reto-activo" element={<ProtectedRoute><AppLayout><RetoActivo /></AppLayout></ProtectedRoute>} />
