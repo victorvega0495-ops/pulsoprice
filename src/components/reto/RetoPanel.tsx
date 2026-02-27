@@ -16,16 +16,13 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
-} from "@/components/ui/dialog";
-import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Upload, TrendingUp, Users, Target, AlertTriangle, Search, Loader2, Undo2, Clock, CalendarDays } from "lucide-react";
+import { Upload, TrendingUp, Users, Target, AlertTriangle, Search, Loader2, Undo2, Clock, CalendarDays, BarChart3 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, Line, ComposedChart } from "recharts";
 import { SociaFicha } from "@/components/reto/SociaFicha";
 
 interface Props {
@@ -84,7 +81,7 @@ export function RetoPanel({ reto, onRefresh }: Props) {
   const [searchText, setSearchText] = useState("");
   const [selectedSocia, setSelectedSocia] = useState<string | null>(null);
   const [revertCarga, setRevertCarga] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState("carga");
   const [chartWeek, setChartWeek] = useState("activa");
 
   const isManager = profile?.rol === "director" || profile?.rol === "gerente";
@@ -132,6 +129,33 @@ export function RetoPanel({ reto, onRefresh }: Props) {
     },
   });
 
+  // Fetch usuarios for grupos/mentoras
+  const { data: usuarios = [] } = useQuery({
+    queryKey: ["usuarios-panel"],
+    queryFn: async () => {
+      const { data } = await supabase.from("usuarios").select("id, auth_id, nombre, rol").eq("activo", true);
+      return data || [];
+    },
+  });
+
+  // Fetch mentoras
+  const { data: mentoras = [] } = useQuery({
+    queryKey: ["mentoras-panel"],
+    queryFn: async () => {
+      const { data } = await supabase.from("mentoras").select("id, nombre").eq("activa", true);
+      return data || [];
+    },
+  });
+
+  // Fetch score_mentoras
+  const { data: scoreMentoras = [] } = useQuery({
+    queryKey: ["score-mentoras", reto.id],
+    queryFn: async () => {
+      const { data } = await supabase.from("score_mentoras").select("*").eq("reto_id", reto.id);
+      return data || [];
+    },
+  });
+
   // KPIs
   const totalSocias = socias.length;
   const ventaAcumulada = socias.reduce((sum: number, s: any) => sum + Number(s.venta_acumulada || 0), 0);
@@ -147,7 +171,6 @@ export function RetoPanel({ reto, onRefresh }: Props) {
   const totalDias = differenceInDays(fin, inicio) + 1;
   const diaActualRaw = differenceInDays(today, inicio) + 1;
 
-  // Week & status calculation
   const isPreReto = today < inicio;
   const isPostReto = today > fin;
   const diasParaInicio = isPreReto ? differenceInDays(inicio, today) : 0;
@@ -174,11 +197,12 @@ export function RetoPanel({ reto, onRefresh }: Props) {
     return true;
   });
 
-  // Chart data — filter by week
+  // Chart data
   const activeChartWeek = chartWeek === "activa" ? (semanaActual > 0 ? semanaActual : 1) : chartWeek === "todo" ? 0 : Number(chartWeek);
 
   const chartData = metasDiarias
     .filter((m: any) => activeChartWeek === 0 || m.semana === activeChartWeek)
+    .sort((a: any, b: any) => a.dia_numero - b.dia_numero)
     .map((m: any) => {
       const fecha = m.fecha ? format(parseISO(m.fecha), "d MMM", { locale: es }) : `D${m.dia_numero}`;
       const isPast = m.fecha ? parseISO(m.fecha) <= today : false;
@@ -189,30 +213,95 @@ export function RetoPanel({ reto, onRefresh }: Props) {
       };
     });
 
-  // Resumen Diario data — cumulative
+  // Resumen Diario — only past days
   const resumenDiario = (() => {
     let ventaAcum = 0;
-    return metasDiarias.map((m: any) => {
-      const ventaDia = Number(m.venta_real || 0);
-      ventaAcum += ventaDia;
-      const metaAcum = Number(m.meta_acumulada_valor || 0);
-      const diff = ventaDia > 0 ? ventaAcum - metaAcum : null;
-      const pctAv = metaAcum > 0 && ventaDia > 0 ? (ventaAcum / metaAcum) * 100 : null;
-      const isPast = m.fecha ? parseISO(m.fecha) <= today : false;
-      return {
-        fecha: m.fecha ? format(parseISO(m.fecha), "d MMM", { locale: es }) : "",
-        diaNumero: m.dia_numero,
-        semana: m.semana,
-        ventaDia: ventaDia > 0 ? ventaDia : null,
-        ventaAcum: ventaDia > 0 ? ventaAcum : null,
-        metaDia: Number(m.meta_acumulada_valor || 0) - (m.dia_numero > 1 ? Number(metasDiarias.find((p: any) => p.dia_numero === m.dia_numero - 1)?.meta_acumulada_valor || 0) : 0),
-        metaAcum,
-        diferencia: diff,
-        pctAvance: pctAv,
-        isPast,
-        hasData: ventaDia > 0,
-      };
+    const sorted = [...metasDiarias].sort((a: any, b: any) => a.dia_numero - b.dia_numero);
+    return sorted
+      .filter((m: any) => !m.fecha || parseISO(m.fecha) <= today)
+      .map((m: any, _i, arr) => {
+        const ventaDia = Number(m.venta_real || 0);
+        ventaAcum += ventaDia;
+        const metaAcum = Number(m.meta_acumulada_valor || 0);
+        const prevMeta = m.dia_numero > 1 ? Number(sorted.find((p: any) => p.dia_numero === m.dia_numero - 1)?.meta_acumulada_valor || 0) : 0;
+        const metaDia = metaAcum - prevMeta;
+        const diff = ventaDia > 0 ? ventaAcum - metaAcum : null;
+        const pctAv = metaAcum > 0 && ventaDia > 0 ? (ventaAcum / metaAcum) * 100 : null;
+        return {
+          fecha: m.fecha ? format(parseISO(m.fecha), "d MMM", { locale: es }) : "",
+          diaNumero: m.dia_numero,
+          semana: m.semana,
+          ventaDia: ventaDia > 0 ? ventaDia : null,
+          ventaAcum: ventaDia > 0 ? ventaAcum : null,
+          metaDia,
+          metaAcum,
+          diferencia: diff,
+          pctAvance: pctAv,
+          hasData: ventaDia > 0,
+        };
+      });
+  })();
+
+  // Grupos data
+  const gruposData = (() => {
+    const coordMap = new Map<string, { nombre: string; socias: any[]; mentoraSubs: Map<string, { nombre: string; socias: any[] }> }>();
+    for (const s of socias) {
+      const cId = s.coordinador_id || "sin_coordinador";
+      const cNombre = cId === "sin_coordinador" ? "Sin coordinador" : (usuarios.find((u: any) => u.auth_id === cId)?.nombre || "Coordinador");
+      if (!coordMap.has(cId)) coordMap.set(cId, { nombre: cNombre, socias: [], mentoraSubs: new Map() });
+      const coord = coordMap.get(cId)!;
+      coord.socias.push(s);
+
+      const mId = s.mentora_id || "sin_mentora";
+      const mNombre = mId === "sin_mentora" ? "Sin mentora" : (mentoras.find((m: any) => m.id === mId)?.nombre || "Mentora");
+      if (!coord.mentoraSubs.has(mId)) coord.mentoraSubs.set(mId, { nombre: mNombre, socias: [] });
+      coord.mentoraSubs.get(mId)!.socias.push(s);
+    }
+    return Array.from(coordMap.entries()).map(([id, data]) => ({
+      id, nombre: data.nombre, socias: data.socias,
+      mentoras: Array.from(data.mentoraSubs.entries()).map(([mId, mData]) => ({ id: mId, ...mData })),
+    }));
+  })();
+
+  // Pareto data
+  const paretoData = (() => {
+    const sorted = [...socias].sort((a: any, b: any) => Number(b.venta_acumulada) - Number(a.venta_acumulada));
+    const total = sorted.reduce((s: number, x: any) => s + Number(x.venta_acumulada || 0), 0);
+    let acum = 0;
+    return sorted.map((s: any, i: number) => {
+      const venta = Number(s.venta_acumulada || 0);
+      const pctTotal = total > 0 ? (venta / total) * 100 : 0;
+      acum += pctTotal;
+      return { ...s, rank: i + 1, pctTotal, pctAcumulado: acum };
     });
+  })();
+
+  // Score mentoras data
+  const scoreMentorasData = (() => {
+    const mentoraIds = [...new Set(socias.map((s: any) => s.mentora_id).filter(Boolean))];
+    const pesosArr = Array.isArray(reto.pesos_semanales) ? reto.pesos_semanales.map(Number) : [15, 25, 30, 30];
+    return mentoraIds.map((mId) => {
+      const mSocias = socias.filter((s: any) => s.mentora_id === mId);
+      const mNombre = mentoras.find((m: any) => m.id === mId)?.nombre || "Mentora";
+      const coordId = mSocias[0]?.coordinador_id;
+      const coordNombre = coordId ? (usuarios.find((u: any) => u.auth_id === coordId)?.nombre || "—") : "—";
+      const totalM = mSocias.length;
+      const conCompra = mSocias.filter((s: any) => Number(s.venta_acumulada) > 0).length;
+      const enRiesgoM = mSocias.filter((s: any) => s.estado === "en_riesgo").length;
+      const inactivasM = mSocias.filter((s: any) => s.estado === "inactiva").length;
+
+      // Get scores from score_mentoras table or compute from socias
+      const scores = [1, 2, 3, 4].map((sem) => {
+        const existing = scoreMentoras.find((sm: any) => sm.mentora_id === mId && sm.semana === sem);
+        if (existing) return Number(existing.score_ponderado || 0);
+        // Fallback: % socias con compra
+        return totalM > 0 ? (conCompra / totalM) * 100 : 0;
+      });
+
+      const ponderado = scores.reduce((acc, sc, i) => acc + sc * (pesosArr[i] / 100), 0);
+
+      return { id: mId, nombre: mNombre, coordinador: coordNombre, total: totalM, conCompra, enRiesgo: enRiesgoM, inactivas: inactivasM, scores, ponderado };
+    }).sort((a, b) => a.ponderado - b.ponderado); // peor primero
   })();
 
   const invalidateAll = () => {
@@ -221,27 +310,12 @@ export function RetoPanel({ reto, onRefresh }: Props) {
     queryClient.invalidateQueries({ queryKey: ["cargas-ventas"] });
   };
 
-  // Ensure default rules exist for this reto
   const ensureDefaultRules = async () => {
     const { data: existingRules } = await supabase
-      .from("reglas_metodo")
-      .select("id")
-      .eq("reto_id", reto.id)
-      .eq("activa", true)
-      .limit(1);
-
+      .from("reglas_metodo").select("id").eq("reto_id", reto.id).eq("activa", true).limit(1);
     if (existingRules && existingRules.length > 0) return;
-
-    console.log("[MOTOR] No hay reglas activas — creando reglas por defecto");
-    const inserts = DEFAULT_RULES.map((r, i) => ({
-      ...r,
-      reto_id: reto.id,
-      orden: i + 1,
-      activa: true,
-    }));
-    const { error } = await supabase.from("reglas_metodo").insert(inserts);
-    if (error) console.error("[MOTOR] Error creando reglas default:", error);
-    else console.log(`[MOTOR] ${inserts.length} reglas por defecto creadas`);
+    const inserts = DEFAULT_RULES.map((r, i) => ({ ...r, reto_id: reto.id, orden: i + 1, activa: true }));
+    await supabase.from("reglas_metodo").insert(inserts);
   };
 
   // Upload ventas
@@ -308,13 +382,8 @@ export function RetoPanel({ reto, onRefresh }: Props) {
         if (!socia) { alertas++; setUploadProgress(p => ({ ...p, current: p.current + 1 })); continue; }
 
         const { data: prevVenta } = await supabase
-          .from("ventas_diarias")
-          .select("venta_acumulada")
-          .eq("reto_id", reto.id)
-          .eq("socia_reto_id", socia.id)
-          .order("fecha", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+          .from("ventas_diarias").select("venta_acumulada").eq("reto_id", reto.id).eq("socia_reto_id", socia.id)
+          .order("fecha", { ascending: false }).limit(1).maybeSingle();
         const prevAcum = prevVenta ? Number(prevVenta.venta_acumulada) : 0;
         const delta = Math.max(0, ventaAcum - prevAcum);
         ventaTotalDia += delta;
@@ -330,32 +399,23 @@ export function RetoPanel({ reto, onRefresh }: Props) {
         const graduacion = pctAvanceSocia >= 100 ? "G1" : (pctAvanceSocia >= 70 ? "G2" : "G3");
 
         await supabase.from("socias_reto").update({
-          venta_acumulada: ventaAcum,
-          venta_semanal: delta,
+          venta_acumulada: ventaAcum, venta_semanal: delta,
           pct_avance: Math.round(pctAvanceSocia * 100) / 100,
           dias_sin_compra: delta > 0 ? 0 : socia.dias_sin_compra + 1,
-          estado: nuevoEstado as any,
-          graduacion_probable: graduacion as any,
+          estado: nuevoEstado as any, graduacion_probable: graduacion as any,
         }).eq("id", socia.id);
 
         processed++;
         setUploadProgress(p => ({ ...p, current: p.current + 1 }));
       }
 
-      // Update meta diaria with real sales
+      // Update meta diaria
       const { data: allDeltasForDate } = await supabase
-        .from("ventas_diarias")
-        .select("delta_diario")
-        .eq("reto_id", reto.id)
-        .eq("fecha", fechaHoy);
+        .from("ventas_diarias").select("delta_diario").eq("reto_id", reto.id).eq("fecha", fechaHoy);
       const realTotal = (allDeltasForDate || []).reduce((s: number, v: any) => s + Number(v.delta_diario), 0);
 
       const { data: metaHoyData } = await supabase
-        .from("metas_diarias_reto")
-        .select("id")
-        .eq("reto_id", reto.id)
-        .eq("fecha", fechaHoy)
-        .maybeSingle();
+        .from("metas_diarias_reto").select("id").eq("reto_id", reto.id).eq("fecha", fechaHoy).maybeSingle();
 
       if (metaHoyData) {
         await supabase.from("metas_diarias_reto").update({ venta_real: realTotal }).eq("id", metaHoyData.id);
@@ -386,83 +446,48 @@ export function RetoPanel({ reto, onRefresh }: Props) {
         venta_total_dia: ventaTotalDia, alertas, total_socias: processed,
       }).eq("id", carga.id);
 
-      // === RULES ENGINE ===
+      // Rules engine
       await ensureDefaultRules();
-
       let accionesGeneradas = 0;
-      let reglasEvaluadas = 0;
       try {
         const { data: reglasActivas } = await supabase
-          .from("reglas_metodo")
-          .select("*")
-          .eq("reto_id", reto.id)
-          .eq("activa", true);
-
+          .from("reglas_metodo").select("*").eq("reto_id", reto.id).eq("activa", true);
         if (reglasActivas && reglasActivas.length > 0) {
           const { data: sociasActualizadas } = await supabase
-            .from("socias_reto")
-            .select("*")
-            .eq("reto_id", reto.id);
-
+            .from("socias_reto").select("*").eq("reto_id", reto.id);
           const semUpload = getSemana(fechaHoy);
-
           for (const regla of reglasActivas) {
             if (!regla.semanas_activas?.includes(semUpload)) continue;
-            reglasEvaluadas++;
-
-            for (const socia of (sociasActualizadas || [])) {
-              if (!evaluateCondition(regla, socia)) continue;
-
+            for (const soc of (sociasActualizadas || [])) {
+              if (!evaluateCondition(regla, soc)) continue;
               const { data: existing } = await supabase
-                .from("acciones_operativas")
-                .select("id")
-                .eq("regla_id", regla.id)
-                .eq("socia_reto_id", socia.id)
-                .in("estado", ["pendiente", "en_progreso"])
-                .limit(1);
+                .from("acciones_operativas").select("id").eq("regla_id", regla.id).eq("socia_reto_id", soc.id)
+                .in("estado", ["pendiente", "en_progreso"]).limit(1);
               if (existing && existing.length > 0) continue;
-
               let asignadaA = user.id;
-              if (regla.asignar_a_rol === "coordinador" && socia.coordinador_id) {
-                asignadaA = socia.coordinador_id;
-              } else if (regla.asignar_a_rol === "desarrolladora" && socia.desarrolladora_id) {
-                asignadaA = socia.desarrolladora_id;
-              } else if (regla.asignar_a_rol === "mentora" && socia.mentora_id) {
-                asignadaA = socia.mentora_id;
-              }
-
+              if (regla.asignar_a_rol === "coordinador" && soc.coordinador_id) asignadaA = soc.coordinador_id;
+              else if (regla.asignar_a_rol === "desarrolladora" && soc.desarrolladora_id) asignadaA = soc.desarrolladora_id;
+              else if (regla.asignar_a_rol === "mentora" && soc.mentora_id) asignadaA = soc.mentora_id;
               const mensaje = (regla.accion_mensaje || "")
-                .replace(/\{nombre\}/g, socia.nombre)
-                .replace(/\{dias_sin_compra\}/g, String(socia.dias_sin_compra))
-                .replace(/\{pct_avance\}/g, String(Number(socia.pct_avance).toFixed(1)))
-                .replace(/\{venta_semanal\}/g, String(Number(socia.venta_semanal).toLocaleString()))
-                .replace(/\{venta_acumulada\}/g, String(Number(socia.venta_acumulada).toLocaleString()));
-
+                .replace(/\{nombre\}/g, soc.nombre).replace(/\{dias_sin_compra\}/g, String(soc.dias_sin_compra))
+                .replace(/\{pct_avance\}/g, String(Number(soc.pct_avance).toFixed(1)))
+                .replace(/\{venta_semanal\}/g, String(Number(soc.venta_semanal).toLocaleString()))
+                .replace(/\{venta_acumulada\}/g, String(Number(soc.venta_acumulada).toLocaleString()));
               const { error: insertErr } = await supabase.from("acciones_operativas").insert({
-                reto_id: reto.id,
-                socia_reto_id: socia.id,
-                asignada_a: asignadaA,
-                tipo: regla.accion_tipo,
-                titulo: regla.nombre,
-                contexto: mensaje,
-                origen: "metodo",
-                prioridad: regla.prioridad,
-                estado: "pendiente",
-                regla_id: regla.id,
+                reto_id: reto.id, socia_reto_id: soc.id, asignada_a: asignadaA,
+                tipo: regla.accion_tipo, titulo: regla.nombre, contexto: mensaje,
+                origen: "metodo", prioridad: regla.prioridad, estado: "pendiente", regla_id: regla.id,
               });
               if (!insertErr) accionesGeneradas++;
             }
           }
         }
-      } catch (engineErr) {
-        console.error("[MOTOR] Error:", engineErr);
-      }
+      } catch (engineErr) { console.error("[MOTOR] Error:", engineErr); }
 
       toast({
         title: "Ventas cargadas",
         description: `${processed} socias · $${ventaTotalDia.toLocaleString()} · ${accionesGeneradas} acciones generadas`,
       });
-
       invalidateAll();
     } catch (err: any) {
       toast({ title: "Error al cargar", description: err.message, variant: "destructive" });
@@ -477,52 +502,36 @@ export function RetoPanel({ reto, onRefresh }: Props) {
     try {
       await supabase.from("ventas_diarias").delete().eq("carga_id", revertCarga.id);
       const { data: allVentas } = await supabase
-        .from("ventas_diarias")
-        .select("socia_reto_id, venta_acumulada, delta_diario, fecha")
-        .eq("reto_id", reto.id)
-        .order("fecha", { ascending: false });
-
+        .from("ventas_diarias").select("socia_reto_id, venta_acumulada, delta_diario, fecha")
+        .eq("reto_id", reto.id).order("fecha", { ascending: false });
       for (const socia of socias) {
         const sociaVentas = (allVentas || []).filter((v: any) => v.socia_reto_id === socia.id);
         const lastVenta = sociaVentas[0];
-        const ventaAcum = lastVenta ? Number(lastVenta.venta_acumulada) : 0;
-        const pctAv = socia.meta_individual > 0 ? (ventaAcum / socia.meta_individual) * 100 : 0;
+        const ventaAcumS = lastVenta ? Number(lastVenta.venta_acumulada) : 0;
+        const pctAv = socia.meta_individual > 0 ? (ventaAcumS / socia.meta_individual) * 100 : 0;
         await supabase.from("socias_reto").update({
-          venta_acumulada: ventaAcum,
-          pct_avance: Math.round(pctAv * 100) / 100,
-          estado: ventaAcum > 0 ? "activa" : "inscrita" as any,
+          venta_acumulada: ventaAcumS, pct_avance: Math.round(pctAv * 100) / 100,
+          estado: ventaAcumS > 0 ? "activa" : "inscrita" as any,
           graduacion_probable: (pctAv >= 100 ? "G1" : pctAv >= 70 ? "G2" : "G3") as any,
         }).eq("id", socia.id);
       }
-
       const { data: remainingVentas } = await supabase
-        .from("ventas_diarias")
-        .select("delta_diario")
-        .eq("reto_id", reto.id)
-        .eq("fecha", revertCarga.fecha);
+        .from("ventas_diarias").select("delta_diario").eq("reto_id", reto.id).eq("fecha", revertCarga.fecha);
       const newVentaReal = (remainingVentas || []).reduce((s: number, v: any) => s + Number(v.delta_diario), 0);
       const metaDia = metasDiarias.find((m: any) => m.fecha === revertCarga.fecha);
-      if (metaDia) {
-        await supabase.from("metas_diarias_reto").update({ venta_real: newVentaReal }).eq("id", (metaDia as any).id);
-      }
+      if (metaDia) { await supabase.from("metas_diarias_reto").update({ venta_real: newVentaReal }).eq("id", (metaDia as any).id); }
       await supabase.from("cargas_ventas").update({ venta_total_dia: 0, total_socias: 0, alertas: 0 }).eq("id", revertCarga.id);
       toast({ title: "Carga revertida" });
       invalidateAll();
     } catch (err: any) {
       toast({ title: "Error al revertir", description: err.message, variant: "destructive" });
-    } finally {
-      setRevertCarga(null);
-    }
+    } finally { setRevertCarga(null); }
   };
 
   const estadoColor: Record<string, string> = {
-    inscrita: "text-muted-foreground",
-    activa: "text-emerald-400",
-    en_riesgo: "text-yellow-400",
-    inactiva: "text-destructive",
-    graduada: "text-blue-400",
+    inscrita: "text-muted-foreground", activa: "text-emerald-400", en_riesgo: "text-yellow-400",
+    inactiva: "text-destructive", graduada: "text-blue-400",
   };
-
   const gradColor: Record<string, string> = {
     G1: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
     G2: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
@@ -531,6 +540,12 @@ export function RetoPanel({ reto, onRefresh }: Props) {
 
   const activeCargasOrdered = cargasRecientes.filter((c: any) => c.total_socias > 0);
   const latestCargaId = activeCargasOrdered.length > 0 ? activeCargasOrdered[0].id : null;
+
+  const paretoChartData = paretoData.filter((s: any) => Number(s.venta_acumulada) > 0).slice(0, 30).map((s: any) => ({
+    nombre: s.nombre.length > 12 ? s.nombre.substring(0, 12) + "…" : s.nombre,
+    venta: Number(s.venta_acumulada),
+    pctAcum: s.pctAcumulado,
+  }));
 
   return (
     <div className="space-y-6">
@@ -544,7 +559,6 @@ export function RetoPanel({ reto, onRefresh }: Props) {
         </div>
       </div>
 
-      {/* Pre-reto banner */}
       {isPreReto && (
         <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 text-center">
           <CalendarDays className="mx-auto h-8 w-8 text-primary mb-2" />
@@ -553,15 +567,14 @@ export function RetoPanel({ reto, onRefresh }: Props) {
         </div>
       )}
 
-      {/* KPI Cards */}
+      {/* KPI Cards — always visible */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard icon={<Users className="h-5 w-5" />} label="Total Socias" value={String(totalSocias)} />
         <KpiCard icon={<TrendingUp className="h-5 w-5" />} label="Venta Acumulada" value={`$${ventaAcumulada.toLocaleString()}`} />
         <KpiCard icon={<Target className="h-5 w-5" />} label="% Avance" value={`${pctAvance.toFixed(1)}%`} />
         <div className="rounded-lg border bg-card p-4">
           <div className="flex items-center gap-2 text-muted-foreground mb-2">
-            <AlertTriangle className="h-5 w-5" />
-            <span className="text-xs">Estado de Socias</span>
+            <AlertTriangle className="h-5 w-5" /><span className="text-xs">Estado de Socias</span>
           </div>
           <div className="flex gap-3 text-sm">
             <span className="text-emerald-400">{activas} activas</span>
@@ -571,52 +584,22 @@ export function RetoPanel({ reto, onRefresh }: Props) {
         </div>
       </div>
 
-      {/* Main Tabs */}
+      {/* ===== 7 TABS ===== */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="overview">Vista General</TabsTrigger>
+        <TabsList className="flex-wrap h-auto gap-1">
+          <TabsTrigger value="carga">Carga de Ventas</TabsTrigger>
           <TabsTrigger value="resumen">Resumen Diario</TabsTrigger>
+          <TabsTrigger value="grafica">Gráfica</TabsTrigger>
+          <TabsTrigger value="grupos">Grupos</TabsTrigger>
+          <TabsTrigger value="score">Score Mentoras</TabsTrigger>
+          <TabsTrigger value="pareto">Pareto</TabsTrigger>
           <TabsTrigger value="socias">Socias</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="space-y-6">
-          {/* Chart with week tabs */}
-          {chartData.length > 0 && (
-            <div className="rounded-lg border bg-card p-4">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-semibold">Meta vs Venta Real por Día</h3>
-                <Tabs value={chartWeek} onValueChange={setChartWeek}>
-                  <TabsList className="h-8">
-                    <TabsTrigger value="activa" className="text-xs px-2 h-6">Activa</TabsTrigger>
-                    <TabsTrigger value="1" className="text-xs px-2 h-6">S1</TabsTrigger>
-                    <TabsTrigger value="2" className="text-xs px-2 h-6">S2</TabsTrigger>
-                    <TabsTrigger value="3" className="text-xs px-2 h-6">S3</TabsTrigger>
-                    <TabsTrigger value="4" className="text-xs px-2 h-6">S4</TabsTrigger>
-                    <TabsTrigger value="todo" className="text-xs px-2 h-6">Todo</TabsTrigger>
-                  </TabsList>
-                </Tabs>
-              </div>
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="dia" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
-                  <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }}
-                    labelStyle={{ color: "hsl(var(--foreground))" }}
-                    formatter={(value: number, name: string) => [`$${value.toLocaleString()}`, name]}
-                  />
-                  <Legend />
-                  <Bar dataKey="meta" fill="hsl(var(--primary) / 0.3)" name="Meta" radius={[2, 2, 0, 0]} />
-                  <Bar dataKey="real" fill="hsl(142 71% 45%)" name="Venta Real" radius={[2, 2, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-
-          {/* Upload ventas */}
+        {/* TAB 1: CARGA DE VENTAS */}
+        <TabsContent value="carga" className="space-y-4">
           {isManager && (
-            <div className="space-y-4">
+            <>
               <div
                 onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                 onDragLeave={() => setDragOver(false)}
@@ -671,10 +654,14 @@ export function RetoPanel({ reto, onRefresh }: Props) {
                   })}
                 </div>
               )}
-            </div>
+            </>
+          )}
+          {!isManager && (
+            <div className="text-center py-12 text-muted-foreground">Solo gerentes y directores pueden cargar ventas.</div>
           )}
         </TabsContent>
 
+        {/* TAB 2: RESUMEN DIARIO */}
         <TabsContent value="resumen">
           <div className="rounded-lg border bg-card overflow-auto">
             <Table>
@@ -691,11 +678,13 @@ export function RetoPanel({ reto, onRefresh }: Props) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {resumenDiario.map((r, i) => (
+                {resumenDiario.length === 0 ? (
+                  <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Sin datos de metas diarias aún</TableCell></TableRow>
+                ) : resumenDiario.map((r, i) => (
                   <TableRow key={i} className={
-                    !r.isPast ? "opacity-50" :
                     r.hasData && r.diferencia !== null && r.diferencia >= 0 ? "bg-emerald-500/5" :
-                    r.hasData && r.diferencia !== null && r.diferencia < 0 ? "bg-red-500/5" : ""
+                    r.hasData && r.diferencia !== null && r.diferencia < 0 ? "bg-red-500/5" :
+                    !r.hasData ? "opacity-50" : ""
                   }>
                     <TableCell className="font-medium">{r.fecha}</TableCell>
                     <TableCell className="text-center text-muted-foreground">{r.diaNumero}</TableCell>
@@ -711,7 +700,6 @@ export function RetoPanel({ reto, onRefresh }: Props) {
                 ))}
               </TableBody>
             </Table>
-            {/* Totals */}
             {resumenDiario.some(r => r.hasData) && (
               <div className="border-t p-4 flex items-center justify-between text-sm font-semibold">
                 <span>Total Acumulado</span>
@@ -725,6 +713,198 @@ export function RetoPanel({ reto, onRefresh }: Props) {
           </div>
         </TabsContent>
 
+        {/* TAB 3: GRÁFICA */}
+        <TabsContent value="grafica">
+          <div className="rounded-lg border bg-card p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold">Meta vs Venta Real por Día</h3>
+              <Tabs value={chartWeek} onValueChange={setChartWeek}>
+                <TabsList className="h-8">
+                  <TabsTrigger value="activa" className="text-xs px-2 h-6">Activa</TabsTrigger>
+                  <TabsTrigger value="1" className="text-xs px-2 h-6">S1</TabsTrigger>
+                  <TabsTrigger value="2" className="text-xs px-2 h-6">S2</TabsTrigger>
+                  <TabsTrigger value="3" className="text-xs px-2 h-6">S3</TabsTrigger>
+                  <TabsTrigger value="4" className="text-xs px-2 h-6">S4</TabsTrigger>
+                  <TabsTrigger value="todo" className="text-xs px-2 h-6">Todo</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+            {chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="dia" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
+                  <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }}
+                    labelStyle={{ color: "hsl(var(--foreground))" }}
+                    formatter={(value: number, name: string) => [`$${value.toLocaleString()}`, name]}
+                  />
+                  <Legend />
+                  <Bar dataKey="meta" fill="hsl(var(--primary) / 0.3)" name="Meta" radius={[2, 2, 0, 0]} />
+                  <Bar dataKey="real" fill="hsl(142 71% 45%)" name="Venta Real" radius={[2, 2, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="text-center py-12 text-muted-foreground">Sin datos de metas diarias aún</div>
+            )}
+          </div>
+        </TabsContent>
+
+        {/* TAB 4: GRUPOS */}
+        <TabsContent value="grupos" className="space-y-4">
+          {gruposData.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">No hay socias asignadas a coordinadores aún</div>
+          ) : gruposData.map((coord) => {
+            const ventaGrupo = coord.socias.reduce((s, x: any) => s + Number(x.venta_acumulada || 0), 0);
+            const metaGrupo = coord.socias.reduce((s, x: any) => s + Number(x.meta_individual || 0), 0);
+            const pctGrupo = metaGrupo > 0 ? (ventaGrupo / metaGrupo) * 100 : 0;
+            return (
+              <div key={coord.id} className="rounded-lg border bg-card p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold">{coord.nombre}</h3>
+                    <p className="text-xs text-muted-foreground">
+                      {coord.socias.length} socias · ${ventaGrupo.toLocaleString()} · {pctGrupo.toFixed(1)}% avance
+                    </p>
+                  </div>
+                  <Badge variant="outline">{coord.socias.length}</Badge>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {coord.mentoras.map((m) => {
+                    const mVenta = m.socias.reduce((s, x: any) => s + Number(x.venta_acumulada || 0), 0);
+                    const mMeta = m.socias.reduce((s, x: any) => s + Number(x.meta_individual || 0), 0);
+                    const mPct = mMeta > 0 ? (mVenta / mMeta) * 100 : 0;
+                    const mConCompra = m.socias.filter((x: any) => Number(x.venta_acumulada) > 0).length;
+                    const mRiesgo = m.socias.filter((x: any) => x.estado === "en_riesgo").length;
+                    const mInact = m.socias.filter((x: any) => x.estado === "inactiva").length;
+                    return (
+                      <div key={m.id} className="rounded border bg-background/50 p-3 space-y-1">
+                        <p className="text-sm font-medium">{m.nombre}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {m.socias.length} socias · {mConCompra} con compra
+                        </p>
+                        <div className="flex gap-2 text-xs">
+                          {mRiesgo > 0 && <span className="text-yellow-400">{mRiesgo} riesgo</span>}
+                          {mInact > 0 && <span className="text-destructive">{mInact} inactivas</span>}
+                        </div>
+                        <p className="text-xs">${mVenta.toLocaleString()} · <span className={mPct >= 100 ? "text-emerald-400" : ""}>{mPct.toFixed(1)}%</span></p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </TabsContent>
+
+        {/* TAB 5: SCORE MENTORAS */}
+        <TabsContent value="score">
+          <div className="rounded-lg border bg-card overflow-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Mentora</TableHead>
+                  <TableHead>Coordinador</TableHead>
+                  <TableHead className="text-center"># Socias</TableHead>
+                  <TableHead className="text-center">Con compra</TableHead>
+                  <TableHead className="text-center">En riesgo</TableHead>
+                  <TableHead className="text-center">Inactivas</TableHead>
+                  <TableHead className="text-center">S1</TableHead>
+                  <TableHead className="text-center">S2</TableHead>
+                  <TableHead className="text-center">S3</TableHead>
+                  <TableHead className="text-center">S4</TableHead>
+                  <TableHead className="text-center">Ponderado</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {scoreMentorasData.length === 0 ? (
+                  <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">Sin mentoras asignadas</TableCell></TableRow>
+                ) : scoreMentorasData.map((m) => {
+                  const scoreColor = (v: number) => v > 80 ? "text-emerald-400" : v >= 50 ? "text-yellow-400" : "text-destructive";
+                  return (
+                    <TableRow key={m.id}>
+                      <TableCell className="font-medium">{m.nombre}</TableCell>
+                      <TableCell className="text-muted-foreground">{m.coordinador}</TableCell>
+                      <TableCell className="text-center">{m.total}</TableCell>
+                      <TableCell className="text-center text-emerald-400">{m.conCompra}</TableCell>
+                      <TableCell className="text-center text-yellow-400">{m.enRiesgo}</TableCell>
+                      <TableCell className="text-center text-destructive">{m.inactivas}</TableCell>
+                      {m.scores.map((sc, i) => (
+                        <TableCell key={i} className={`text-center font-medium ${scoreColor(sc)}`}>{sc.toFixed(0)}%</TableCell>
+                      ))}
+                      <TableCell className={`text-center font-bold ${scoreColor(m.ponderado)}`}>{m.ponderado.toFixed(1)}%</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </TabsContent>
+
+        {/* TAB 6: PARETO */}
+        <TabsContent value="pareto" className="space-y-4">
+          {paretoChartData.length > 0 && (
+            <div className="rounded-lg border bg-card p-4">
+              <h3 className="text-sm font-semibold mb-4">Distribución Pareto de Ventas</h3>
+              <ResponsiveContainer width="100%" height={280}>
+                <ComposedChart data={paretoChartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="nombre" tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} angle={-45} textAnchor="end" height={60} />
+                  <YAxis yAxisId="left" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v) => `${v.toFixed(0)}%`} domain={[0, 100]} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }}
+                    formatter={(value: number, name: string) => [name === "% Acumulado" ? `${value.toFixed(1)}%` : `$${value.toLocaleString()}`, name]}
+                  />
+                  <Legend />
+                  <Bar yAxisId="left" dataKey="venta" fill="hsl(var(--primary))" name="Venta" radius={[2, 2, 0, 0]} />
+                  <Line yAxisId="right" dataKey="pctAcum" stroke="hsl(142 71% 45%)" name="% Acumulado" strokeWidth={2} dot={false} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          <div className="rounded-lg border bg-card overflow-auto max-h-[500px]">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-12">#</TableHead>
+                  <TableHead>Socia</TableHead>
+                  <TableHead>Tienda</TableHead>
+                  <TableHead className="text-right">Venta Acum.</TableHead>
+                  <TableHead className="text-right">% del Total</TableHead>
+                  <TableHead className="text-right">% Acumulado</TableHead>
+                  <TableHead>G Probable</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paretoData.length === 0 ? (
+                  <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Sin datos de venta</TableCell></TableRow>
+                ) : paretoData.map((s: any) => {
+                  const crossedPareto = s.pctAcumulado >= 80 && (s.pctAcumulado - s.pctTotal) < 80;
+                  return (
+                    <TableRow key={s.id} className={crossedPareto ? "bg-primary/10 border-l-2 border-l-primary" : ""}>
+                      <TableCell className="text-muted-foreground">{s.rank}</TableCell>
+                      <TableCell className="font-medium">{s.nombre}</TableCell>
+                      <TableCell className="text-muted-foreground">{s.tienda_visita || "—"}</TableCell>
+                      <TableCell className="text-right">${Number(s.venta_acumulada).toLocaleString()}</TableCell>
+                      <TableCell className="text-right">{s.pctTotal.toFixed(1)}%</TableCell>
+                      <TableCell className="text-right font-medium">{s.pctAcumulado.toFixed(1)}%</TableCell>
+                      <TableCell>
+                        {s.graduacion_probable ? (
+                          <Badge variant="outline" className={gradColor[s.graduacion_probable] || ""}>{s.graduacion_probable}</Badge>
+                        ) : "—"}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </TabsContent>
+
+        {/* TAB 7: SOCIAS */}
         <TabsContent value="socias" className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative flex-1 min-w-[200px]">
@@ -759,37 +939,33 @@ export function RetoPanel({ reto, onRefresh }: Props) {
               </TableHeader>
               <TableBody>
                 {filtered.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No hay socias que coincidan</TableCell>
+                  <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No hay socias que coincidan</TableCell></TableRow>
+                ) : filtered.map((s: any) => (
+                  <TableRow key={s.id} className="cursor-pointer" onClick={() => setSelectedSocia(s.id)}>
+                    <TableCell className="font-medium">{s.nombre}</TableCell>
+                    <TableCell className="text-muted-foreground">{s.tienda_visita || "—"}</TableCell>
+                    <TableCell className="text-right">${Number(s.baseline_mensual).toLocaleString()}</TableCell>
+                    <TableCell className="text-right">${Number(s.venta_acumulada).toLocaleString()}</TableCell>
+                    <TableCell className="text-right">{Number(s.pct_avance).toFixed(1)}%</TableCell>
+                    <TableCell className="text-center">{s.dias_sin_compra}</TableCell>
+                    <TableCell>
+                      <span className={`flex items-center gap-1.5 text-sm ${estadoColor[s.estado] || ""}`}>
+                        <span className={`h-2 w-2 rounded-full ${
+                          s.estado === "activa" ? "bg-emerald-400" :
+                          s.estado === "en_riesgo" ? "bg-yellow-400" :
+                          s.estado === "inactiva" ? "bg-red-400" :
+                          s.estado === "graduada" ? "bg-blue-400" : "bg-muted-foreground/40"
+                        }`} />
+                        {s.estado}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      {s.graduacion_probable ? (
+                        <Badge variant="outline" className={gradColor[s.graduacion_probable] || ""}>{s.graduacion_probable}</Badge>
+                      ) : "—"}
+                    </TableCell>
                   </TableRow>
-                ) : (
-                  filtered.map((s: any) => (
-                    <TableRow key={s.id} className="cursor-pointer" onClick={() => setSelectedSocia(s.id)}>
-                      <TableCell className="font-medium">{s.nombre}</TableCell>
-                      <TableCell className="text-muted-foreground">{s.tienda_visita || "—"}</TableCell>
-                      <TableCell className="text-right">${Number(s.baseline_mensual).toLocaleString()}</TableCell>
-                      <TableCell className="text-right">${Number(s.venta_acumulada).toLocaleString()}</TableCell>
-                      <TableCell className="text-right">{Number(s.pct_avance).toFixed(1)}%</TableCell>
-                      <TableCell className="text-center">{s.dias_sin_compra}</TableCell>
-                      <TableCell>
-                        <span className={`flex items-center gap-1.5 text-sm ${estadoColor[s.estado] || ""}`}>
-                          <span className={`h-2 w-2 rounded-full ${
-                            s.estado === "activa" ? "bg-emerald-400" :
-                            s.estado === "en_riesgo" ? "bg-yellow-400" :
-                            s.estado === "inactiva" ? "bg-red-400" :
-                            s.estado === "graduada" ? "bg-blue-400" : "bg-muted-foreground/40"
-                          }`} />
-                          {s.estado}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        {s.graduacion_probable ? (
-                          <Badge variant="outline" className={gradColor[s.graduacion_probable] || ""}>{s.graduacion_probable}</Badge>
-                        ) : "—"}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
+                ))}
               </TableBody>
             </Table>
           </div>
@@ -802,26 +978,17 @@ export function RetoPanel({ reto, onRefresh }: Props) {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>¿Deshacer esta carga?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Se eliminarán las ventas del {revertCarga?.fecha} y se recalcularán las métricas.
-            </AlertDialogDescription>
+            <AlertDialogDescription>Se eliminarán las ventas del {revertCarga?.fecha} y se recalcularán las métricas.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleRevert} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Deshacer carga
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleRevert} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Deshacer carga</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       {/* Socia ficha drawer */}
-      <SociaFicha
-        sociaId={selectedSocia}
-        retoId={reto.id}
-        open={!!selectedSocia}
-        onClose={() => setSelectedSocia(null)}
-      />
+      <SociaFicha sociaId={selectedSocia} retoId={reto.id} open={!!selectedSocia} onClose={() => setSelectedSocia(null)} />
     </div>
   );
 }
@@ -830,8 +997,7 @@ function KpiCard({ icon, label, value }: { icon: React.ReactNode; label: string;
   return (
     <div className="rounded-lg border bg-card p-4">
       <div className="flex items-center gap-2 text-muted-foreground mb-2">
-        {icon}
-        <span className="text-xs">{label}</span>
+        {icon}<span className="text-xs">{label}</span>
       </div>
       <p className="text-xl font-bold">{value}</p>
     </div>
