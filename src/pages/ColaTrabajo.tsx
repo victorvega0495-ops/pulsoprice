@@ -354,7 +354,10 @@ export default function ColaTrabajo() {
         <div className="flex flex-col items-center justify-center py-24">
           <PartyPopper className="h-16 w-16 text-primary mb-4" />
           <h2 className="text-xl font-bold mb-2">¡Todo al día!</h2>
-          <p className="text-muted-foreground">No tienes acciones pendientes.</p>
+          <p className="text-muted-foreground mb-2">No tienes acciones pendientes.</p>
+          <p className="text-xs text-muted-foreground/70 max-w-sm text-center">
+            Las acciones se generan automáticamente al cargar ventas si el reto tiene reglas activas. Ve a Reglas del Método para configurarlas.
+          </p>
         </div>
       ) : (
         <div className="space-y-3">

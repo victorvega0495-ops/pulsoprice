@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { format, differenceInDays, parseISO } from "date-fns";
+import { format, differenceInDays, parseISO, addDays } from "date-fns";
 import { es } from "date-fns/locale";
 import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/supabase/client";
@@ -22,10 +22,12 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Upload, TrendingUp, Users, Target, AlertTriangle, Search, Loader2, Undo2, Clock } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Upload, TrendingUp, Users, Target, AlertTriangle, Search, Loader2, Undo2, Clock, CalendarDays } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import { SociaFicha } from "@/components/reto/SociaFicha";
+
 interface Props {
   reto: any;
   onRefresh: () => void;
@@ -42,7 +44,6 @@ function evaluateCondition(regla: any, socia: any): boolean {
       case "estado": actual = socia.estado; break;
       case "g_probable": actual = socia.graduacion_probable; break;
       case "primera_compra":
-        // primera_compra = true means venta_acumulada > 0 and equals today's delta (approximation)
         return valor === "true" ? Number(socia.venta_acumulada) > 0 && Number(socia.venta_acumulada) === Number(socia.venta_semanal) : false;
       case "crediprice_activo":
         return valor === "true" ? socia.crediprice_activo === true : socia.crediprice_activo === false;
@@ -66,6 +67,13 @@ function evaluateCondition(regla: any, socia: any): boolean {
   return regla.logica_extra === "OR" ? result1 || result2 : result1 && result2;
 }
 
+const DEFAULT_RULES = [
+  { nombre: "Socia sin compra día 3+", campo: "dias_sin_compra", operador: ">=", valor: "3", accion_tipo: "contactar", accion_mensaje: "Contactar a {nombre}: lleva {dias_sin_compra} días sin comprar.", prioridad: "alta", asignar_a_rol: "coordinador", semanas_activas: [1, 2, 3, 4], condicion_extra: false },
+  { nombre: "Socia primera compra", campo: "primera_compra", operador: "=", valor: "true", accion_tipo: "celebrar", accion_mensaje: "¡Felicitar a {nombre} por su primera compra! Venta: ${venta_acumulada}.", prioridad: "media", asignar_a_rol: "mentora", semanas_activas: [1, 2, 3, 4], condicion_extra: false },
+  { nombre: "Socia inactiva 7+ días", campo: "dias_sin_compra", operador: ">=", valor: "7", accion_tipo: "contactar", accion_mensaje: "URGENTE: {nombre} lleva {dias_sin_compra} días sin compra. Intervención requerida.", prioridad: "urgente", asignar_a_rol: "coordinador", semanas_activas: [1, 2, 3, 4], condicion_extra: false },
+  { nombre: "CrediPrice no activado día 4+", campo: "crediprice_activo", operador: "=", valor: "false", accion_tipo: "contactar", accion_mensaje: "Revisar CrediPrice con {nombre}. No ha activado su crédito.", prioridad: "media", asignar_a_rol: "coordinador", semanas_activas: [1, 2, 3, 4], condicion_extra: true, campo2: "dias_sin_compra", operador2: ">=", valor2: "4", logica_extra: "AND" },
+];
+
 export function RetoPanel({ reto, onRefresh }: Props) {
   const { profile, user } = useAuth();
   const queryClient = useQueryClient();
@@ -76,6 +84,8 @@ export function RetoPanel({ reto, onRefresh }: Props) {
   const [searchText, setSearchText] = useState("");
   const [selectedSocia, setSelectedSocia] = useState<string | null>(null);
   const [revertCarga, setRevertCarga] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState("overview");
+  const [chartWeek, setChartWeek] = useState("activa");
 
   const isManager = profile?.rol === "director" || profile?.rol === "gerente";
 
@@ -134,12 +144,23 @@ export function RetoPanel({ reto, onRefresh }: Props) {
   const today = new Date();
   const inicio = parseISO(reto.fecha_inicio);
   const fin = parseISO(reto.fecha_fin);
-  const diasRestantes = Math.max(0, differenceInDays(fin, today));
   const totalDias = differenceInDays(fin, inicio) + 1;
-  const diaActual = Math.min(differenceInDays(today, inicio) + 1, totalDias);
-  const semanaActual = Math.min(Math.ceil(diaActual / 7), 4);
+  const diaActualRaw = differenceInDays(today, inicio) + 1;
 
-  // Compute semana from arbitrary date
+  // Week & status calculation
+  const isPreReto = today < inicio;
+  const isPostReto = today > fin;
+  const diasParaInicio = isPreReto ? differenceInDays(inicio, today) : 0;
+  const diasRestantes = isPostReto ? 0 : Math.max(0, differenceInDays(fin, today));
+  const diaActual = isPreReto ? 0 : Math.min(diaActualRaw, totalDias);
+  const semanaActual = isPreReto ? 0 : isPostReto ? -1 : Math.min(Math.ceil(diaActual / 7), 4);
+
+  const getWeekLabel = () => {
+    if (isPreReto) return `Pre-reto · Inicia en ${diasParaInicio} día${diasParaInicio !== 1 ? "s" : ""}`;
+    if (isPostReto) return "Reto finalizado";
+    return `Semana ${semanaActual} · ${diasRestantes} días restantes`;
+  };
+
   const getSemana = (fechaStr: string) => {
     const d = parseISO(fechaStr);
     const dia = Math.min(differenceInDays(d, inicio) + 1, totalDias);
@@ -153,17 +174,74 @@ export function RetoPanel({ reto, onRefresh }: Props) {
     return true;
   });
 
-  // Chart data
-  const chartData = metasDiarias.slice(0, 35).map((m: any) => ({
-    dia: `D${m.dia_numero}`,
-    meta: Number(m.meta_acumulada_valor),
-    real: Number(m.venta_real) > 0 ? Number(m.venta_real) : undefined,
-  }));
+  // Chart data — filter by week
+  const activeChartWeek = chartWeek === "activa" ? (semanaActual > 0 ? semanaActual : 1) : chartWeek === "todo" ? 0 : Number(chartWeek);
+
+  const chartData = metasDiarias
+    .filter((m: any) => activeChartWeek === 0 || m.semana === activeChartWeek)
+    .map((m: any) => {
+      const fecha = m.fecha ? format(parseISO(m.fecha), "d MMM", { locale: es }) : `D${m.dia_numero}`;
+      const isPast = m.fecha ? parseISO(m.fecha) <= today : false;
+      return {
+        dia: fecha,
+        meta: Number(m.meta_acumulada_valor),
+        real: isPast && Number(m.venta_real) > 0 ? Number(m.venta_real) : undefined,
+      };
+    });
+
+  // Resumen Diario data — cumulative
+  const resumenDiario = (() => {
+    let ventaAcum = 0;
+    return metasDiarias.map((m: any) => {
+      const ventaDia = Number(m.venta_real || 0);
+      ventaAcum += ventaDia;
+      const metaAcum = Number(m.meta_acumulada_valor || 0);
+      const diff = ventaDia > 0 ? ventaAcum - metaAcum : null;
+      const pctAv = metaAcum > 0 && ventaDia > 0 ? (ventaAcum / metaAcum) * 100 : null;
+      const isPast = m.fecha ? parseISO(m.fecha) <= today : false;
+      return {
+        fecha: m.fecha ? format(parseISO(m.fecha), "d MMM", { locale: es }) : "",
+        diaNumero: m.dia_numero,
+        semana: m.semana,
+        ventaDia: ventaDia > 0 ? ventaDia : null,
+        ventaAcum: ventaDia > 0 ? ventaAcum : null,
+        metaDia: Number(m.meta_acumulada_valor || 0) - (m.dia_numero > 1 ? Number(metasDiarias.find((p: any) => p.dia_numero === m.dia_numero - 1)?.meta_acumulada_valor || 0) : 0),
+        metaAcum,
+        diferencia: diff,
+        pctAvance: pctAv,
+        isPast,
+        hasData: ventaDia > 0,
+      };
+    });
+  })();
 
   const invalidateAll = () => {
     queryClient.invalidateQueries({ queryKey: ["socias-reto"] });
     queryClient.invalidateQueries({ queryKey: ["metas-diarias"] });
     queryClient.invalidateQueries({ queryKey: ["cargas-ventas"] });
+  };
+
+  // Ensure default rules exist for this reto
+  const ensureDefaultRules = async () => {
+    const { data: existingRules } = await supabase
+      .from("reglas_metodo")
+      .select("id")
+      .eq("reto_id", reto.id)
+      .eq("activa", true)
+      .limit(1);
+
+    if (existingRules && existingRules.length > 0) return;
+
+    console.log("[MOTOR] No hay reglas activas — creando reglas por defecto");
+    const inserts = DEFAULT_RULES.map((r, i) => ({
+      ...r,
+      reto_id: reto.id,
+      orden: i + 1,
+      activa: true,
+    }));
+    const { error } = await supabase.from("reglas_metodo").insert(inserts);
+    if (error) console.error("[MOTOR] Error creando reglas default:", error);
+    else console.log(`[MOTOR] ${inserts.length} reglas por defecto creadas`);
   };
 
   // Upload ventas
@@ -183,14 +261,11 @@ export function RetoPanel({ reto, onRefresh }: Props) {
         reader.readAsBinaryString(file);
       });
 
-      // Determine the fecha from each row — use first row to get date for the carga record
       const firstRow = data[0] || {};
       const parseFecha = (raw: any): string => {
         if (raw == null || raw === "") return format(today, "yyyy-MM-dd");
-        // XLSX may parse dates as JS Date objects or serial numbers
         if (raw instanceof Date) return format(raw, "yyyy-MM-dd");
         if (typeof raw === "number") {
-          // Excel serial date number
           const d = new Date((raw - 25569) * 86400 * 1000);
           return format(d, "yyyy-MM-dd");
         }
@@ -204,7 +279,6 @@ export function RetoPanel({ reto, onRefresh }: Props) {
       };
       const fechaRaw = firstRow.fecha ?? firstRow.FECHA ?? firstRow.Fecha ?? "";
       const fechaHoy = parseFecha(fechaRaw);
-      console.log(`[DEBUG] Fecha de carga determinada: ${fechaHoy}`);
       let ventaTotalDia = 0;
       let alertas = 0;
       let processed = 0;
@@ -218,14 +292,9 @@ export function RetoPanel({ reto, onRefresh }: Props) {
         .select().single();
       if (cargaErr) throw cargaErr;
 
-      // Auto-transition: publicado → activo on first upload
       if (reto.estado === "publicado") {
         const { error: transErr } = await supabase.from("retos").update({ estado: "activo" as any }).eq("id", reto.id);
-        if (transErr) console.error("[DEBUG] Error transitioning reto to activo:", transErr);
-        else {
-          console.log("[DEBUG] Reto transitioned to activo");
-          onRefresh();
-        }
+        if (!transErr) { onRefresh(); }
       }
 
       setUploadProgress({ current: 0, total: data.length });
@@ -238,7 +307,6 @@ export function RetoPanel({ reto, onRefresh }: Props) {
         const socia = socias.find((s: any) => s.id_socia === idSocia);
         if (!socia) { alertas++; setUploadProgress(p => ({ ...p, current: p.current + 1 })); continue; }
 
-        // Get previous venta_acumulada from ventas_diarias (most recent) or socias_reto
         const { data: prevVenta } = await supabase
           .from("ventas_diarias")
           .select("venta_acumulada")
@@ -261,7 +329,7 @@ export function RetoPanel({ reto, onRefresh }: Props) {
         const nuevoEstado = delta > 0 ? "activa" : (diasSinCompraActual >= 7 ? "inactiva" : (diasSinCompraActual >= 3 ? "en_riesgo" : socia.estado));
         const graduacion = pctAvanceSocia >= 100 ? "G1" : (pctAvanceSocia >= 70 ? "G2" : "G3");
 
-        const { error: updateErr } = await supabase.from("socias_reto").update({
+        await supabase.from("socias_reto").update({
           venta_acumulada: ventaAcum,
           venta_semanal: delta,
           pct_avance: Math.round(pctAvanceSocia * 100) / 100,
@@ -269,13 +337,12 @@ export function RetoPanel({ reto, onRefresh }: Props) {
           estado: nuevoEstado as any,
           graduacion_probable: graduacion as any,
         }).eq("id", socia.id);
-        if (updateErr) console.error('[DEBUG] Error updating socia_reto:', socia.id, updateErr);
 
         processed++;
         setUploadProgress(p => ({ ...p, current: p.current + 1 }));
       }
 
-      // Update meta diaria with real sales — query actual total for the date (handles multiple uploads same day)
+      // Update meta diaria with real sales
       const { data: allDeltasForDate } = await supabase
         .from("ventas_diarias")
         .select("delta_diario")
@@ -291,45 +358,28 @@ export function RetoPanel({ reto, onRefresh }: Props) {
         .maybeSingle();
 
       if (metaHoyData) {
-        await supabase.from("metas_diarias_reto").update({
-          venta_real: realTotal,
-        }).eq("id", metaHoyData.id);
-        console.log(`[DEBUG] Venta real actualizada para ${fechaHoy}: $${realTotal}`);
+        await supabase.from("metas_diarias_reto").update({ venta_real: realTotal }).eq("id", metaHoyData.id);
       } else {
-        // CREATE the meta_diaria record for this date
         const diaNum = Math.max(1, differenceInDays(parseISO(fechaHoy), inicio) + 1);
         const sem = Math.min(4, Math.ceil(diaNum / 7));
         const pesosArr = Array.isArray(reto.pesos_semanales) ? reto.pesos_semanales : [15, 25, 30, 30];
         const metaGlobal = socias.reduce((s: number, sc: any) => s + Number(sc.meta_individual || 0), 0);
-        // Accumulated meta up to this day
         const diasPorSemana = 7;
         let metaAcum = 0;
         for (let s = 1; s <= sem; s++) {
           const peso = Number(pesosArr[s - 1] || 25) / 100;
           const metaSemana = metaGlobal * peso;
-          if (s < sem) {
-            metaAcum += metaSemana;
-          } else {
+          if (s < sem) { metaAcum += metaSemana; }
+          else {
             const diaEnSemana = ((diaNum - 1) % diasPorSemana) + 1;
             metaAcum += metaSemana * (diaEnSemana / diasPorSemana);
           }
         }
         const pctMeta = metaGlobal > 0 ? (metaAcum / metaGlobal) * 100 : 0;
-
-        const { error: insertMetaErr } = await supabase.from("metas_diarias_reto").insert({
-          reto_id: reto.id,
-          fecha: fechaHoy,
-          dia_numero: diaNum,
-          semana: sem,
-          meta_acumulada_valor: Math.round(metaAcum),
-          meta_acumulada_pct: Math.round(pctMeta * 100) / 100,
-          venta_real: realTotal,
+        await supabase.from("metas_diarias_reto").insert({
+          reto_id: reto.id, fecha: fechaHoy, dia_numero: diaNum, semana: sem,
+          meta_acumulada_valor: Math.round(metaAcum), meta_acumulada_pct: Math.round(pctMeta * 100) / 100, venta_real: realTotal,
         });
-        if (insertMetaErr) {
-          console.error('[DEBUG] Error inserting meta_diaria:', insertMetaErr);
-        } else {
-          console.log(`[DEBUG] Meta diaria CREADA para ${fechaHoy}: meta=$${Math.round(metaAcum)}, real=$${realTotal}`);
-        }
       }
 
       await supabase.from("cargas_ventas").update({
@@ -337,40 +387,32 @@ export function RetoPanel({ reto, onRefresh }: Props) {
       }).eq("id", carga.id);
 
       // === RULES ENGINE ===
+      await ensureDefaultRules();
+
       let accionesGeneradas = 0;
       let reglasEvaluadas = 0;
       try {
-        const { data: reglasActivas, error: reglasErr } = await supabase
+        const { data: reglasActivas } = await supabase
           .from("reglas_metodo")
           .select("*")
           .eq("reto_id", reto.id)
           .eq("activa", true);
 
-        console.log(`[MOTOR] Reglas activas encontradas: ${reglasActivas?.length || 0}`, reglasErr || '');
-
         if (reglasActivas && reglasActivas.length > 0) {
-          // Re-fetch updated socias
           const { data: sociasActualizadas } = await supabase
             .from("socias_reto")
             .select("*")
             .eq("reto_id", reto.id);
 
           const semUpload = getSemana(fechaHoy);
-          console.log(`[MOTOR] Semana actual del reto: ${semUpload}`);
 
           for (const regla of reglasActivas) {
-            if (!regla.semanas_activas?.includes(semUpload)) {
-              console.log(`[MOTOR] Regla "${regla.nombre}" omitida - no activa en semana ${semUpload} (activa en: ${regla.semanas_activas})`);
-              continue;
-            }
+            if (!regla.semanas_activas?.includes(semUpload)) continue;
             reglasEvaluadas++;
-            let matchCount = 0;
 
             for (const socia of (sociasActualizadas || [])) {
               if (!evaluateCondition(regla, socia)) continue;
-              matchCount++;
 
-              // Check duplicate
               const { data: existing } = await supabase
                 .from("acciones_operativas")
                 .select("id")
@@ -378,21 +420,16 @@ export function RetoPanel({ reto, onRefresh }: Props) {
                 .eq("socia_reto_id", socia.id)
                 .in("estado", ["pendiente", "en_progreso"])
                 .limit(1);
-              if (existing && existing.length > 0) {
-                console.log(`[MOTOR] Duplicado existente para regla "${regla.nombre}" + socia "${socia.nombre}"`);
-                continue;
-              }
+              if (existing && existing.length > 0) continue;
 
-              // Determine assignee - MUST be a valid UUID, fallback to current user
-              let asignadaA = user.id; // safe default: auth user id
-              if (regla.asignar_a_rol === "coordinador" && socia.operador_id) {
-                asignadaA = socia.operador_id;
-              } else if ((regla.asignar_a_rol as string) === "desarrolladora" && (socia as any).desarrolladora_id) {
-                asignadaA = (socia as any).desarrolladora_id;
+              let asignadaA = user.id;
+              if (regla.asignar_a_rol === "coordinador" && socia.coordinador_id) {
+                asignadaA = socia.coordinador_id;
+              } else if (regla.asignar_a_rol === "desarrolladora" && socia.desarrolladora_id) {
+                asignadaA = socia.desarrolladora_id;
               } else if (regla.asignar_a_rol === "mentora" && socia.mentora_id) {
                 asignadaA = socia.mentora_id;
               }
-              // gerente / fallback → user.id (the person uploading)
 
               const mensaje = (regla.accion_mensaje || "")
                 .replace(/\{nombre\}/g, socia.nombre)
@@ -413,26 +450,17 @@ export function RetoPanel({ reto, onRefresh }: Props) {
                 estado: "pendiente",
                 regla_id: regla.id,
               });
-              if (insertErr) {
-                console.error(`[MOTOR] Error insertando acción para "${regla.nombre}" + "${socia.nombre}":`, insertErr);
-              } else {
-                accionesGeneradas++;
-              }
+              if (!insertErr) accionesGeneradas++;
             }
-            console.log(`[MOTOR] Regla "${regla.nombre}": ${matchCount} socias coinciden`);
           }
         }
       } catch (engineErr) {
-        console.error("[MOTOR] Error general en motor de reglas:", engineErr);
+        console.error("[MOTOR] Error:", engineErr);
       }
-      console.log(`[MOTOR] Resumen: ${accionesGeneradas} acciones generadas de ${reglasEvaluadas} reglas evaluadas`);
-
-      const desc = `${processed} socias procesadas · Venta del día: $${ventaTotalDia.toLocaleString()} · ${alertas} alertas` +
-        ` · Motor de reglas: ${accionesGeneradas} acciones de ${reglasEvaluadas} reglas`;
 
       toast({
         title: "Ventas cargadas",
-        description: desc,
+        description: `${processed} socias · $${ventaTotalDia.toLocaleString()} · ${accionesGeneradas} acciones generadas`,
       });
 
       invalidateAll();
@@ -447,10 +475,7 @@ export function RetoPanel({ reto, onRefresh }: Props) {
   const handleRevert = async () => {
     if (!revertCarga) return;
     try {
-      // 1. Delete ventas_diarias for this carga
       await supabase.from("ventas_diarias").delete().eq("carga_id", revertCarga.id);
-
-      // 2. Recalculate each socia based on remaining ventas
       const { data: allVentas } = await supabase
         .from("ventas_diarias")
         .select("socia_reto_id, venta_acumulada, delta_diario, fecha")
@@ -462,7 +487,6 @@ export function RetoPanel({ reto, onRefresh }: Props) {
         const lastVenta = sociaVentas[0];
         const ventaAcum = lastVenta ? Number(lastVenta.venta_acumulada) : 0;
         const pctAv = socia.meta_individual > 0 ? (ventaAcum / socia.meta_individual) * 100 : 0;
-
         await supabase.from("socias_reto").update({
           venta_acumulada: ventaAcum,
           pct_avance: Math.round(pctAv * 100) / 100,
@@ -471,25 +495,18 @@ export function RetoPanel({ reto, onRefresh }: Props) {
         }).eq("id", socia.id);
       }
 
-      // 3. Recalculate metas_diarias_reto venta_real for the reverted date
       const { data: remainingVentas } = await supabase
         .from("ventas_diarias")
         .select("delta_diario")
         .eq("reto_id", reto.id)
         .eq("fecha", revertCarga.fecha);
-
       const newVentaReal = (remainingVentas || []).reduce((s: number, v: any) => s + Number(v.delta_diario), 0);
       const metaDia = metasDiarias.find((m: any) => m.fecha === revertCarga.fecha);
       if (metaDia) {
-        await supabase.from("metas_diarias_reto").update({ venta_real: newVentaReal }).eq("id", metaDia.id);
+        await supabase.from("metas_diarias_reto").update({ venta_real: newVentaReal }).eq("id", (metaDia as any).id);
       }
-
-      // 4. Mark carga as reverted (we store 0 values to indicate)
-      await supabase.from("cargas_ventas").update({
-        venta_total_dia: 0, total_socias: 0, alertas: 0,
-      }).eq("id", revertCarga.id);
-
-      toast({ title: "Carga revertida", description: `Se deshicieron las ventas del ${revertCarga.fecha}` });
+      await supabase.from("cargas_ventas").update({ venta_total_dia: 0, total_socias: 0, alertas: 0 }).eq("id", revertCarga.id);
+      toast({ title: "Carga revertida" });
       invalidateAll();
     } catch (err: any) {
       toast({ title: "Error al revertir", description: err.message, variant: "destructive" });
@@ -512,7 +529,6 @@ export function RetoPanel({ reto, onRefresh }: Props) {
     G3: "bg-red-500/20 text-red-400 border-red-500/30",
   };
 
-  // Find the latest non-reverted carga for undo
   const activeCargasOrdered = cargasRecientes.filter((c: any) => c.total_socias > 0);
   const latestCargaId = activeCargasOrdered.length > 0 ? activeCargasOrdered[0].id : null;
 
@@ -523,10 +539,19 @@ export function RetoPanel({ reto, onRefresh }: Props) {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{reto.nombre}</h1>
           <p className="text-sm text-muted-foreground">
-            {format(inicio, "d MMM", { locale: es })} — {format(fin, "d MMM yyyy", { locale: es })} · Semana {semanaActual} · {diasRestantes} días restantes
+            {format(inicio, "d MMM", { locale: es })} — {format(fin, "d MMM yyyy", { locale: es })} · {getWeekLabel()}
           </p>
         </div>
       </div>
+
+      {/* Pre-reto banner */}
+      {isPreReto && (
+        <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 text-center">
+          <CalendarDays className="mx-auto h-8 w-8 text-primary mb-2" />
+          <p className="text-sm font-medium">El reto inicia el {format(inicio, "d 'de' MMMM yyyy", { locale: es })}</p>
+          <p className="text-xs text-muted-foreground mt-1">Faltan {diasParaInicio} días</p>
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -546,94 +571,231 @@ export function RetoPanel({ reto, onRefresh }: Props) {
         </div>
       </div>
 
-      {/* Chart */}
-      {chartData.length > 0 && (
-        <div className="rounded-lg border bg-card p-4">
-          <h3 className="mb-4 text-sm font-semibold">Meta vs Venta Real por Día</h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(220 20% 18%)" />
-              <XAxis dataKey="dia" tick={{ fontSize: 10, fill: "hsl(218 11% 65%)" }} />
-              <YAxis tick={{ fontSize: 10, fill: "hsl(218 11% 65%)" }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
-              <Tooltip
-                contentStyle={{ backgroundColor: "hsl(220 33% 9%)", border: "1px solid hsl(220 20% 18%)", borderRadius: "8px" }}
-                labelStyle={{ color: "hsl(210 20% 98%)" }}
-                formatter={(value: number, name: string) => [`$${value.toLocaleString()}`, name]}
-              />
-              <Legend />
-              <Bar dataKey="meta" fill="hsl(217 91% 60% / 0.3)" name="Meta" radius={[2, 2, 0, 0]} />
-              <Bar dataKey="real" fill="hsl(142 71% 45%)" name="Venta Real" radius={[2, 2, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      )}
+      {/* Main Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="overview">Vista General</TabsTrigger>
+          <TabsTrigger value="resumen">Resumen Diario</TabsTrigger>
+          <TabsTrigger value="socias">Socias</TabsTrigger>
+        </TabsList>
 
-      {/* Upload ventas + historial */}
-      {isManager && (
-        <div className="space-y-4">
-          <div
-            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={(e) => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files[0]; if (f) handleUpload(f); }}
-            className={`relative flex items-center justify-center rounded-lg border-2 border-dashed p-8 transition-colors ${
-              dragOver ? "border-primary bg-primary/5" : "border-border"
-            } ${uploading ? "opacity-50 pointer-events-none" : ""}`}
-          >
-            {uploading ? (
-              <div className="flex flex-col items-center gap-3 w-full max-w-sm">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <p className="text-sm font-medium">Procesando {uploadProgress.total} socias...</p>
-                <Progress value={uploadProgress.total > 0 ? (uploadProgress.current / uploadProgress.total) * 100 : 0} className="w-full" />
-                <p className="text-xs text-muted-foreground">{uploadProgress.current} de {uploadProgress.total} registros</p>
+        <TabsContent value="overview" className="space-y-6">
+          {/* Chart with week tabs */}
+          {chartData.length > 0 && (
+            <div className="rounded-lg border bg-card p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold">Meta vs Venta Real por Día</h3>
+                <Tabs value={chartWeek} onValueChange={setChartWeek}>
+                  <TabsList className="h-8">
+                    <TabsTrigger value="activa" className="text-xs px-2 h-6">Activa</TabsTrigger>
+                    <TabsTrigger value="1" className="text-xs px-2 h-6">S1</TabsTrigger>
+                    <TabsTrigger value="2" className="text-xs px-2 h-6">S2</TabsTrigger>
+                    <TabsTrigger value="3" className="text-xs px-2 h-6">S3</TabsTrigger>
+                    <TabsTrigger value="4" className="text-xs px-2 h-6">S4</TabsTrigger>
+                    <TabsTrigger value="todo" className="text-xs px-2 h-6">Todo</TabsTrigger>
+                  </TabsList>
+                </Tabs>
               </div>
-            ) : (
-              <>
-                <Upload className="mr-3 h-6 w-6 text-muted-foreground" />
-                <div>
-                  <p className="text-sm font-medium">Subir Excel de ventas del día</p>
-                  <p className="text-xs text-muted-foreground">Arrastra el archivo o haz click para seleccionar</p>
-                </div>
-              </>
-            )}
-            <input
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(f); }}
-              className="absolute inset-0 cursor-pointer opacity-0"
-              disabled={uploading}
-            />
-          </div>
-
-          {/* Upload history */}
-          {cargasRecientes.length > 0 && (
-            <div className="rounded-lg border bg-card p-4 space-y-2">
-              <h4 className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
-                <Clock className="h-3.5 w-3.5" /> Historial de cargas recientes
-              </h4>
-              {cargasRecientes.map((c: any) => {
-                const isReverted = c.total_socias === 0 && c.venta_total_dia === 0;
-                const canUndo = c.id === latestCargaId;
-                return (
-                  <div key={c.id} className="flex items-center justify-between text-sm py-1.5 border-b border-border/50 last:border-0">
-                    <div className="flex items-center gap-3">
-                      <span className="text-muted-foreground">{format(new Date(c.created_at), "dd/MM HH:mm")}</span>
-                      <span>{c.archivo_nombre}</span>
-                      <span className="text-muted-foreground">{c.total_socias} socias</span>
-                      <span className="text-muted-foreground">${Number(c.venta_total_dia).toLocaleString()}</span>
-                      {isReverted && <Badge variant="outline" className="text-[10px] text-destructive border-destructive/30">Revertida</Badge>}
-                    </div>
-                    {canUndo && !isReverted && (
-                      <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive hover:text-destructive" onClick={() => setRevertCarga(c)}>
-                        <Undo2 className="h-3 w-3 mr-1" /> Deshacer
-                      </Button>
-                    )}
-                  </div>
-                );
-              })}
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="dia" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
+                  <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }}
+                    labelStyle={{ color: "hsl(var(--foreground))" }}
+                    formatter={(value: number, name: string) => [`$${value.toLocaleString()}`, name]}
+                  />
+                  <Legend />
+                  <Bar dataKey="meta" fill="hsl(var(--primary) / 0.3)" name="Meta" radius={[2, 2, 0, 0]} />
+                  <Bar dataKey="real" fill="hsl(142 71% 45%)" name="Venta Real" radius={[2, 2, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           )}
-        </div>
-      )}
+
+          {/* Upload ventas */}
+          {isManager && (
+            <div className="space-y-4">
+              <div
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files[0]; if (f) handleUpload(f); }}
+                className={`relative flex items-center justify-center rounded-lg border-2 border-dashed p-8 transition-colors ${
+                  dragOver ? "border-primary bg-primary/5" : "border-border"
+                } ${uploading ? "opacity-50 pointer-events-none" : ""}`}
+              >
+                {uploading ? (
+                  <div className="flex flex-col items-center gap-3 w-full max-w-sm">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <p className="text-sm font-medium">Procesando {uploadProgress.total} socias...</p>
+                    <Progress value={uploadProgress.total > 0 ? (uploadProgress.current / uploadProgress.total) * 100 : 0} className="w-full" />
+                    <p className="text-xs text-muted-foreground">{uploadProgress.current} de {uploadProgress.total}</p>
+                  </div>
+                ) : (
+                  <>
+                    <Upload className="mr-3 h-6 w-6 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm font-medium">Subir Excel de ventas del día</p>
+                      <p className="text-xs text-muted-foreground">Columnas: id_socia, nombre, venta_acumulada, fecha</p>
+                    </div>
+                  </>
+                )}
+                <input type="file" accept=".xlsx,.xls" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(f); }} className="absolute inset-0 cursor-pointer opacity-0" disabled={uploading} />
+              </div>
+
+              {cargasRecientes.length > 0 && (
+                <div className="rounded-lg border bg-card p-4 space-y-2">
+                  <h4 className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                    <Clock className="h-3.5 w-3.5" /> Historial de cargas
+                  </h4>
+                  {cargasRecientes.map((c: any) => {
+                    const isReverted = c.total_socias === 0 && c.venta_total_dia === 0;
+                    const canUndo = c.id === latestCargaId;
+                    return (
+                      <div key={c.id} className="flex items-center justify-between text-sm py-1.5 border-b border-border/50 last:border-0">
+                        <div className="flex items-center gap-3">
+                          <span className="text-muted-foreground">{format(new Date(c.created_at), "dd/MM HH:mm")}</span>
+                          <span>{c.archivo_nombre}</span>
+                          <span className="text-muted-foreground">{c.total_socias} socias</span>
+                          <span className="text-muted-foreground">${Number(c.venta_total_dia).toLocaleString()}</span>
+                          {isReverted && <Badge variant="outline" className="text-[10px] text-destructive border-destructive/30">Revertida</Badge>}
+                        </div>
+                        {canUndo && !isReverted && (
+                          <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive hover:text-destructive" onClick={() => setRevertCarga(c)}>
+                            <Undo2 className="h-3 w-3 mr-1" /> Deshacer
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="resumen">
+          <div className="rounded-lg border bg-card overflow-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead className="text-center">Día</TableHead>
+                  <TableHead className="text-right">Venta del Día</TableHead>
+                  <TableHead className="text-right">Venta Acum.</TableHead>
+                  <TableHead className="text-right">Meta del Día</TableHead>
+                  <TableHead className="text-right">Meta Acum.</TableHead>
+                  <TableHead className="text-right">Diferencia</TableHead>
+                  <TableHead className="text-right">% Avance</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {resumenDiario.map((r, i) => (
+                  <TableRow key={i} className={
+                    !r.isPast ? "opacity-50" :
+                    r.hasData && r.diferencia !== null && r.diferencia >= 0 ? "bg-emerald-500/5" :
+                    r.hasData && r.diferencia !== null && r.diferencia < 0 ? "bg-red-500/5" : ""
+                  }>
+                    <TableCell className="font-medium">{r.fecha}</TableCell>
+                    <TableCell className="text-center text-muted-foreground">{r.diaNumero}</TableCell>
+                    <TableCell className="text-right">{r.ventaDia != null ? `$${r.ventaDia.toLocaleString()}` : "—"}</TableCell>
+                    <TableCell className="text-right">{r.ventaAcum != null ? `$${r.ventaAcum.toLocaleString()}` : "—"}</TableCell>
+                    <TableCell className="text-right text-muted-foreground">${r.metaDia.toLocaleString()}</TableCell>
+                    <TableCell className="text-right text-muted-foreground">${r.metaAcum.toLocaleString()}</TableCell>
+                    <TableCell className={`text-right font-medium ${r.diferencia != null ? (r.diferencia >= 0 ? "text-emerald-400" : "text-destructive") : ""}`}>
+                      {r.diferencia != null ? `${r.diferencia >= 0 ? "+" : ""}$${r.diferencia.toLocaleString()}` : "—"}
+                    </TableCell>
+                    <TableCell className="text-right">{r.pctAvance != null ? `${r.pctAvance.toFixed(1)}%` : "—"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            {/* Totals */}
+            {resumenDiario.some(r => r.hasData) && (
+              <div className="border-t p-4 flex items-center justify-between text-sm font-semibold">
+                <span>Total Acumulado</span>
+                <div className="flex gap-6">
+                  <span>${ventaAcumulada.toLocaleString()}</span>
+                  <span className="text-muted-foreground">${metaTotal.toLocaleString()}</span>
+                  <span className={pctAvance >= 100 ? "text-emerald-400" : "text-destructive"}>{pctAvance.toFixed(1)}%</span>
+                </div>
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="socias" className="space-y-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input placeholder="Buscar socia o tienda..." value={searchText} onChange={(e) => setSearchText(e.target.value)} className="pl-9" />
+            </div>
+            <Select value={filterEstado} onValueChange={setFilterEstado}>
+              <SelectTrigger className="w-40"><SelectValue placeholder="Estado" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="inscrita">Inscrita</SelectItem>
+                <SelectItem value="activa">Activa</SelectItem>
+                <SelectItem value="en_riesgo">En riesgo</SelectItem>
+                <SelectItem value="inactiva">Inactiva</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="rounded-lg border bg-card overflow-auto max-h-[500px]">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nombre</TableHead>
+                  <TableHead>Tienda</TableHead>
+                  <TableHead className="text-right">Baseline</TableHead>
+                  <TableHead className="text-right">Venta Acum.</TableHead>
+                  <TableHead className="text-right">% Avance</TableHead>
+                  <TableHead className="text-center">Días s/compra</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead>G. Probable</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No hay socias que coincidan</TableCell>
+                  </TableRow>
+                ) : (
+                  filtered.map((s: any) => (
+                    <TableRow key={s.id} className="cursor-pointer" onClick={() => setSelectedSocia(s.id)}>
+                      <TableCell className="font-medium">{s.nombre}</TableCell>
+                      <TableCell className="text-muted-foreground">{s.tienda_visita || "—"}</TableCell>
+                      <TableCell className="text-right">${Number(s.baseline_mensual).toLocaleString()}</TableCell>
+                      <TableCell className="text-right">${Number(s.venta_acumulada).toLocaleString()}</TableCell>
+                      <TableCell className="text-right">{Number(s.pct_avance).toFixed(1)}%</TableCell>
+                      <TableCell className="text-center">{s.dias_sin_compra}</TableCell>
+                      <TableCell>
+                        <span className={`flex items-center gap-1.5 text-sm ${estadoColor[s.estado] || ""}`}>
+                          <span className={`h-2 w-2 rounded-full ${
+                            s.estado === "activa" ? "bg-emerald-400" :
+                            s.estado === "en_riesgo" ? "bg-yellow-400" :
+                            s.estado === "inactiva" ? "bg-red-400" :
+                            s.estado === "graduada" ? "bg-blue-400" : "bg-muted-foreground/40"
+                          }`} />
+                          {s.estado}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        {s.graduacion_probable ? (
+                          <Badge variant="outline" className={gradColor[s.graduacion_probable] || ""}>{s.graduacion_probable}</Badge>
+                        ) : "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+          <p className="text-xs text-muted-foreground">{filtered.length} de {totalSocias} socias</p>
+        </TabsContent>
+      </Tabs>
 
       {/* Revert confirmation */}
       <AlertDialog open={!!revertCarga} onOpenChange={(o) => !o && setRevertCarga(null)}>
@@ -641,7 +803,7 @@ export function RetoPanel({ reto, onRefresh }: Props) {
           <AlertDialogHeader>
             <AlertDialogTitle>¿Deshacer esta carga?</AlertDialogTitle>
             <AlertDialogDescription>
-              Se eliminarán las ventas del {revertCarga?.fecha} y se recalcularán las métricas de todas las socias. Esta acción no se puede deshacer.
+              Se eliminarán las ventas del {revertCarga?.fecha} y se recalcularán las métricas.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -652,78 +814,6 @@ export function RetoPanel({ reto, onRefresh }: Props) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      {/* Socias table */}
-      <div className="space-y-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Buscar socia o tienda..." value={searchText} onChange={(e) => setSearchText(e.target.value)} className="pl-9" />
-          </div>
-          <Select value={filterEstado} onValueChange={setFilterEstado}>
-            <SelectTrigger className="w-40"><SelectValue placeholder="Estado" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos</SelectItem>
-              <SelectItem value="inscrita">Inscrita</SelectItem>
-              <SelectItem value="activa">Activa</SelectItem>
-              <SelectItem value="en_riesgo">En riesgo</SelectItem>
-              <SelectItem value="inactiva">Inactiva</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="rounded-lg border bg-card overflow-auto max-h-[500px]">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nombre</TableHead>
-                <TableHead>Tienda</TableHead>
-                <TableHead className="text-right">Baseline</TableHead>
-                <TableHead className="text-right">Venta Acum.</TableHead>
-                <TableHead className="text-right">% Avance</TableHead>
-                <TableHead className="text-center">Días s/compra</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>G. Probable</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No hay socias que coincidan</TableCell>
-                </TableRow>
-              ) : (
-                filtered.map((s: any) => (
-                  <TableRow key={s.id} className="cursor-pointer" onClick={() => setSelectedSocia(s.id)}>
-                    <TableCell className="font-medium">{s.nombre}</TableCell>
-                    <TableCell className="text-muted-foreground">{s.tienda_visita || "—"}</TableCell>
-                    <TableCell className="text-right">${Number(s.baseline_mensual).toLocaleString()}</TableCell>
-                    <TableCell className="text-right">${Number(s.venta_acumulada).toLocaleString()}</TableCell>
-                    <TableCell className="text-right">{Number(s.pct_avance).toFixed(1)}%</TableCell>
-                    <TableCell className="text-center">{s.dias_sin_compra}</TableCell>
-                    <TableCell>
-                      <span className={`flex items-center gap-1.5 text-sm ${estadoColor[s.estado] || ""}`}>
-                        <span className={`h-2 w-2 rounded-full ${
-                          s.estado === "activa" ? "bg-emerald-400" :
-                          s.estado === "en_riesgo" ? "bg-yellow-400" :
-                          s.estado === "inactiva" ? "bg-red-400" :
-                          s.estado === "graduada" ? "bg-blue-400" : "bg-muted-foreground/40"
-                        }`} />
-                        {s.estado}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      {s.graduacion_probable ? (
-                        <Badge variant="outline" className={gradColor[s.graduacion_probable] || ""}>{s.graduacion_probable}</Badge>
-                      ) : "—"}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-        <p className="text-xs text-muted-foreground">{filtered.length} de {totalSocias} socias</p>
-      </div>
 
       {/* Socia ficha drawer */}
       <SociaFicha
@@ -747,4 +837,3 @@ function KpiCard({ icon, label, value }: { icon: React.ReactNode; label: string;
     </div>
   );
 }
-
