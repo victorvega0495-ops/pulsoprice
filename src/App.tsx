@@ -36,8 +36,8 @@ function DefaultRedirect() {
   const redirectMap: Record<string, string> = {
     director: "/dashboard",
     gerente: "/dashboard-operativo",
-    operador: "/cola-trabajo",
-    call_center: "/llamadas",
+    coordinador: "/cola-trabajo",
+    desarrolladora: "/cola-trabajo",
     mentora: "/pendientes",
   };
 
@@ -65,7 +65,6 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route path="/setup" element={<Setup />} />
             <Route path="/" element={<ProtectedRoute><DefaultRedirect /></ProtectedRoute>} />
-            {/* All app routes use the same layout + placeholder */}
             <Route path="/dashboard" element={<ProtectedRoute><AppLayout><DashboardEjecutivo /></AppLayout></ProtectedRoute>} />
             <Route path="/retos" element={<LayoutRoute />} />
             <Route path="/equipo" element={<ProtectedRoute><AppLayout><Equipo /></AppLayout></ProtectedRoute>} />
@@ -76,8 +75,8 @@ const App = () => (
             <Route path="/centro-ia" element={<LayoutRoute />} />
             <Route path="/cola-trabajo" element={<ProtectedRoute><AppLayout><ColaTrabajo /></AppLayout></ProtectedRoute>} />
             <Route path="/mi-reto" element={<LayoutRoute />} />
-            <Route path="/mi-pipeline" element={<LayoutRoute />} />
-            <Route path="/llamadas" element={<LayoutRoute />} />
+            <Route path="/mis-mentoras" element={<LayoutRoute />} />
+            <Route path="/contenido" element={<LayoutRoute />} />
             <Route path="/pendientes" element={<LayoutRoute />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

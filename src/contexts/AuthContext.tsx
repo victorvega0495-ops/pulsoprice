@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 import { supabase } from "@/integrations/supabase/client";
 import type { Session, User } from "@supabase/supabase-js";
 
-type UserRole = "director" | "gerente" | "operador" | "call_center" | "mentora";
+type UserRole = "director" | "gerente" | "coordinador" | "desarrolladora" | "mentora";
 
 interface UsuarioProfile {
   id: string;
@@ -10,7 +10,6 @@ interface UsuarioProfile {
   nombre: string;
   email: string;
   rol: UserRole;
-  modo_operativo: string[];
   activo: boolean;
 }
 
@@ -40,7 +39,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (data && !error) {
       if (!data.activo) {
-        // Inactive user - sign them out
         await supabase.auth.signOut();
         setProfile(null);
         return;
@@ -51,7 +49,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         nombre: data.nombre,
         email: data.email,
         rol: data.rol as UserRole,
-        modo_operativo: data.modo_operativo || [],
         activo: data.activo,
       });
     }
@@ -63,7 +60,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
-          // Use setTimeout to avoid Supabase deadlock
           setTimeout(() => fetchProfile(session.user.id), 0);
         } else {
           setProfile(null);

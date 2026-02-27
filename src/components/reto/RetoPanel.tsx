@@ -358,12 +358,14 @@ export function RetoPanel({ reto, onRefresh }: Props) {
 
               // Determine assignee - MUST be a valid UUID, fallback to current user
               let asignadaA = user.id; // safe default: auth user id
-              if (regla.asignar_a_rol === "operador" && socia.operador_id) {
+              if (regla.asignar_a_rol === "coordinador" && socia.operador_id) {
                 asignadaA = socia.operador_id;
+              } else if ((regla.asignar_a_rol as string) === "desarrolladora" && (socia as any).desarrolladora_id) {
+                asignadaA = (socia as any).desarrolladora_id;
               } else if (regla.asignar_a_rol === "mentora" && socia.mentora_id) {
                 asignadaA = socia.mentora_id;
               }
-              // gerente / call_center / fallback → user.id (the person uploading)
+              // gerente / fallback → user.id (the person uploading)
 
               const mensaje = (regla.accion_mensaje || "")
                 .replace(/\{nombre\}/g, socia.nombre)

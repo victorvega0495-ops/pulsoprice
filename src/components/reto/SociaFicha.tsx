@@ -130,8 +130,8 @@ export function SociaFicha({ sociaId, retoId, open, onClose }: SociaFichaProps) 
     enabled: !!sociaId && open,
   });
 
-  // Fetch operador & mentora names
-  const { data: operadorNombre } = useQuery({
+  // Fetch coordinador & mentora names
+  const { data: coordinadorNombre } = useQuery({
     queryKey: ["usuario-nombre", socia?.operador_id],
     queryFn: async () => {
       if (!socia?.operador_id) return null;
@@ -237,7 +237,7 @@ export function SociaFicha({ sociaId, retoId, open, onClose }: SociaFichaProps) 
                   {socia.tienda_visita && <span>· {socia.tienda_visita}</span>}
                 </div>
                 <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-muted-foreground">
-                  {operadorNombre && <span>Op: {operadorNombre}</span>}
+                  {coordinadorNombre && <span>Coord: {coordinadorNombre}</span>}
                   {mentoraNombre && <span>· Mentora: {mentoraNombre}</span>}
                 </div>
               </div>
