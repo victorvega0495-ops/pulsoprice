@@ -90,10 +90,13 @@ export default function ColaTrabajo() {
     },
   });
 
-  // Determine the active reto id for default filter
+  // Determine the active reto id for default filter — show all by default
   const activeRetoId = filterRetoId === "auto"
-    ? (retosDisponibles.find((r: any) => r.estado === "activo")?.id || retosDisponibles[0]?.id || null)
-    : filterRetoId === "todos" ? null : filterRetoId;
+    ? null // Show all active retos by default
+    : filterRetoId === "todos" ? null
+    : filterRetoId === "operacion" ? "operacion"
+    : filterRetoId === "seguimiento" ? "seguimiento"
+    : filterRetoId;
 
   // Fetch acciones
   const { data: acciones = [], isLoading } = useQuery({
@@ -101,11 +104,11 @@ export default function ColaTrabajo() {
     queryFn: async () => {
       let query = supabase
         .from("acciones_operativas")
-        .select("*, socias_reto!inner(nombre, telefono, tienda_visita, venta_acumulada, meta_individual, dias_sin_compra, estado, id_socia), retos!inner(nombre)")
+        .select("*, socias_reto!inner(nombre, telefono, tienda_visita, venta_acumulada, meta_individual, dias_sin_compra, estado, id_socia), retos!inner(nombre, tipo_reto)")
         .in("estado", ["pendiente", "pospuesta"])
         .order("created_at", { ascending: true });
 
-      if (activeRetoId) {
+      if (activeRetoId && activeRetoId !== "operacion" && activeRetoId !== "seguimiento") {
         query = query.eq("reto_id", activeRetoId);
       }
 
@@ -120,8 +123,11 @@ export default function ColaTrabajo() {
       return (data || [])
         .filter((a: any) => {
           if (a.estado === "pospuesta" && a.pospuesta_hasta) {
-            return new Date(a.pospuesta_hasta) <= now;
+            if (new Date(a.pospuesta_hasta) > now) return false;
           }
+          // Filter by tipo_reto if selected
+          if (activeRetoId === "operacion" && a.retos?.tipo_reto !== "operacion") return false;
+          if (activeRetoId === "seguimiento" && a.retos?.tipo_reto !== "seguimiento") return false;
           return true;
         })
         .sort((a: any, b: any) => {
@@ -319,10 +325,11 @@ export default function ColaTrabajo() {
             <SelectValue placeholder="Reto" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="auto">Reto activo más reciente</SelectItem>
-            <SelectItem value="todos">Todos los retos</SelectItem>
+            <SelectItem value="auto">Todos mis retos</SelectItem>
+            <SelectItem value="operacion">Solo Operación</SelectItem>
+            <SelectItem value="seguimiento">Solo Seguimiento</SelectItem>
             {retosDisponibles.map((r: any) => (
-              <SelectItem key={r.id} value={r.id}>{r.nombre}</SelectItem>
+              <SelectItem key={r.id} value={r.id}>{r.nombre} ({(r as any).tipo_reto === "seguimiento" ? "Seguimiento" : "Operación"})</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -376,6 +383,9 @@ export default function ColaTrabajo() {
                 <div className={cn("w-1 self-stretch rounded-full shrink-0", prioridadColors[accion.prioridad])} />
                 <div className="flex-1 min-w-0 space-y-1">
                   <div className="flex items-center gap-2 flex-wrap">
+                    <Badge variant="outline" className={cn("text-[10px] uppercase", accion.retos?.tipo_reto === "seguimiento" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : "bg-blue-500/20 text-blue-400 border-blue-500/30")}>
+                      {accion.retos?.nombre || "Reto"}
+                    </Badge>
                     <Badge variant="outline" className={cn("text-[10px] uppercase", origenBadge[accion.origen] || origenBadge[origenKey] || origenBadge.MANUAL)}>
                       {accion.origen}
                     </Badge>

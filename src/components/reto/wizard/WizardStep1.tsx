@@ -167,6 +167,24 @@ export function WizardStep1({ form, setForm }: Props) {
       </div>
 
       <div className="space-y-2">
+        <Label>Tipo de reto</Label>
+        <RadioGroup
+          value={form.tipo_reto || "operacion"}
+          onValueChange={(v) => setForm({ ...form, tipo_reto: v as any })}
+          className="flex gap-4"
+        >
+          <label className="flex items-center gap-2 cursor-pointer">
+            <RadioGroupItem value="operacion" />
+            <span className="text-sm">Reto de Operación</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <RadioGroupItem value="seguimiento" />
+            <span className="text-sm">Programa de Seguimiento</span>
+          </label>
+        </RadioGroup>
+      </div>
+
+      <div className="space-y-2">
         <Label>Tipo de meta</Label>
         <RadioGroup
           value={form.tipo_meta}

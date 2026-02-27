@@ -27,6 +27,7 @@ export interface RetoFormData {
   fecha_fin: Date | undefined;
   meta_estandar: number;
   tipo_meta: "estandar" | "personalizada";
+  tipo_reto: "operacion" | "seguimiento";
   tiendas: string[];
   socias: SociaRow[];
   pesos_semanales: number[];
@@ -51,6 +52,7 @@ export function RetoWizard({ onClose, onPublished }: Props) {
     fecha_fin: undefined,
     meta_estandar: 38000,
     tipo_meta: "estandar",
+    tipo_reto: "operacion",
     tiendas: [],
     socias: [],
     pesos_semanales: [15, 25, 30, 30],
