@@ -23,7 +23,10 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Copy, Trash2, Edit2, ArrowUp, ArrowDown, BookOpen, Loader2 } from "lucide-react";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Plus, Copy, Trash2, Edit2, ArrowUp, ArrowDown, BookOpen, Loader2, MoreVertical } from "lucide-react";
 
 const CAMPOS = [
   { value: "dias_sin_compra", label: "Días sin compra" },
@@ -317,21 +320,19 @@ export default function ReglasMetodo() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-16">Orden</TableHead>
-                <TableHead>Nombre</TableHead>
+                <TableHead className="w-12">Orden</TableHead>
+                <TableHead className="min-w-[140px]">Nombre</TableHead>
                 <TableHead>Condición</TableHead>
-                <TableHead>Acción</TableHead>
-                <TableHead>Asignar a</TableHead>
-                <TableHead>Prioridad</TableHead>
-                <TableHead>Semanas</TableHead>
-                <TableHead className="text-center">Estado</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
+                <TableHead className="w-[90px]">Asignar a</TableHead>
+                <TableHead className="w-[80px]">Prioridad</TableHead>
+                <TableHead className="w-[100px]">Semanas</TableHead>
+                <TableHead className="w-10"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {visibleReglas.map((r: any, idx: number) => (
                 <TableRow key={r.id} className={!r.activa ? "opacity-50" : ""}>
-                  <TableCell>
+                  <TableCell className="py-2">
                     <div className="flex items-center gap-1">
                       <span className="text-muted-foreground text-xs w-4">{r.orden}</span>
                       <div className="flex flex-col">
@@ -344,13 +345,15 @@ export default function ReglasMetodo() {
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell className="font-medium max-w-[180px] truncate">{r.nombre}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground font-mono max-w-[200px] truncate">{formatCondition(r)}</TableCell>
-                  <TableCell className="text-xs capitalize">{r.accion_tipo}</TableCell>
+                  <TableCell className="font-medium text-sm">
+                    <div className="truncate max-w-[160px]">{r.nombre}</div>
+                    <div className="text-[10px] text-muted-foreground capitalize">{r.accion_tipo}</div>
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground font-mono max-w-[220px] truncate">{formatCondition(r)}</TableCell>
                   <TableCell className="text-xs capitalize">{r.asignar_a_rol}</TableCell>
                   <TableCell>{prioridadBadge(r.prioridad)}</TableCell>
                   <TableCell>
-                    <div className="flex gap-1">
+                    <div className="flex gap-0.5">
                       {[1,2,3,4].map((s) => (
                         <Badge key={s} variant="outline" className={`text-[10px] px-1 ${r.semanas_activas?.includes(s) ? "bg-primary/20 text-primary border-primary/30" : "opacity-30"}`}>
                           S{s}
@@ -358,21 +361,27 @@ export default function ReglasMetodo() {
                       ))}
                     </div>
                   </TableCell>
-                  <TableCell className="text-center">
-                    <Switch checked={r.activa} onCheckedChange={() => handleToggleActiva(r)} />
-                  </TableCell>
                   <TableCell>
-                    <div className="flex justify-end gap-1">
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(r)}>
-                        <Edit2 className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleDuplicate(r)}>
-                        <Copy className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteTarget(r.id)}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-7 w-7"><MoreVertical className="h-4 w-4" /></Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => openEdit(r)}>
+                          <Edit2 className="mr-2 h-3.5 w-3.5" /> Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleDuplicate(r)}>
+                          <Copy className="mr-2 h-3.5 w-3.5" /> Duplicar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleToggleActiva(r)}>
+                          {r.activa ? "Desactivar" : "Activar"}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteTarget(r.id)}>
+                          <Trash2 className="mr-2 h-3.5 w-3.5" /> Eliminar
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))}

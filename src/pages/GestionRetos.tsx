@@ -63,6 +63,7 @@ export default function GestionRetos() {
   const [deleteReto, setDeleteReto] = useState<any>(null);
   const [transitionReto, setTransitionReto] = useState<any>(null);
   const [transitionTarget, setTransitionTarget] = useState<{ target: string; label: string; description: string } | null>(null);
+  const [duplicateReto, setDuplicateReto] = useState<any>(null);
 
   const { data: retos = [], isLoading } = useQuery({
     queryKey: ["todos-retos"],
@@ -124,22 +125,26 @@ export default function GestionRetos() {
 
   const handleDelete = async () => {
     if (!deleteReto) return;
-    // Cascade delete related data
+    // Cascade delete related data - all dependent tables
     await supabase.from("acciones_operativas").delete().eq("reto_id", deleteReto.id);
     await supabase.from("ventas_diarias").delete().eq("reto_id", deleteReto.id);
     await supabase.from("cargas_ventas").delete().eq("reto_id", deleteReto.id);
     await supabase.from("alertas").delete().eq("reto_id", deleteReto.id);
     await supabase.from("reglas_metodo").delete().eq("reto_id", deleteReto.id);
     await supabase.from("metas_diarias_reto").delete().eq("reto_id", deleteReto.id);
+    await supabase.from("score_mentoras").delete().eq("reto_id", deleteReto.id);
+    await supabase.from("compromisos_mentora").delete().eq("reto_id", deleteReto.id);
     await supabase.from("socias_reto").delete().eq("reto_id", deleteReto.id);
     const { error } = await supabase.from("retos").delete().eq("id", deleteReto.id);
     if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
-    toast({ title: "Reto eliminado" });
+    toast({ title: "Reto eliminado permanentemente" });
     queryClient.invalidateQueries({ queryKey: ["todos-retos"] });
     setDeleteReto(null);
   };
 
-  const handleDuplicate = async (r: any) => {
+  const handleDuplicate = async () => {
+    if (!duplicateReto) return;
+    const r = duplicateReto;
     const { error } = await supabase.from("retos").insert({
       nombre: `${r.nombre} (copia)`,
       fecha_inicio: r.fecha_inicio,
@@ -153,7 +158,7 @@ export default function GestionRetos() {
       created_by: profile?.auth_id || r.created_by,
       estado: "borrador" as any,
     });
-    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+    if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); setDuplicateReto(null); return; }
     // Duplicate reglas
     const { data: reglas } = await supabase.from("reglas_metodo").select("*").eq("reto_id", r.id);
     if (reglas && reglas.length > 0) {
@@ -163,8 +168,9 @@ export default function GestionRetos() {
         await supabase.from("reglas_metodo").insert(inserts);
       }
     }
-    toast({ title: "Reto duplicado en estado borrador" });
+    toast({ title: "Reto duplicado correctamente", description: `"${r.nombre} (copia)" creado en estado borrador` });
     queryClient.invalidateQueries({ queryKey: ["todos-retos"] });
+    setDuplicateReto(null);
   };
 
   const datesEditable = editReto && ["borrador", "publicado"].includes(editReto.estado);
@@ -245,7 +251,7 @@ export default function GestionRetos() {
                                 <RefreshCw className="mr-2 h-3.5 w-3.5" /> {t.label}
                               </DropdownMenuItem>
                             ))}
-                            <DropdownMenuItem onClick={() => handleDuplicate(r)}>
+                            <DropdownMenuItem onClick={() => setDuplicateReto(r)}>
                               <Copy className="mr-2 h-3.5 w-3.5" /> Duplicar
                             </DropdownMenuItem>
                             {canDelete && (
@@ -334,14 +340,32 @@ export default function GestionRetos() {
       <AlertDialog open={!!deleteReto} onOpenChange={(o) => !o && setDeleteReto(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar "{deleteReto?.nombre}"?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esto eliminará el reto y todos sus datos asociados ({sociasCounts[deleteReto?.id] || 0} socias, acciones, ventas, cargas). Esta acción no se puede deshacer.
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" /> ¿Eliminar "{deleteReto?.nombre}"?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-destructive/80">
+              ⚠️ Esto eliminará permanentemente el reto y todos sus datos ({sociasCounts[deleteReto?.id] || 0} socias, acciones, ventas, cargas, reglas, scores). Esta acción NO se puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Eliminar</AlertDialogAction>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Eliminar permanentemente</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Duplicate Confirmation */}
+      <AlertDialog open={!!duplicateReto} onOpenChange={(o) => !o && setDuplicateReto(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Duplicar "{duplicateReto?.nombre}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se copiará la configuración y reglas del reto sin socias. El nuevo reto se creará en estado borrador.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDuplicate}>Duplicar</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
