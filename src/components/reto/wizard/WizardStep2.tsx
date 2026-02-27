@@ -1,18 +1,20 @@
 import { useCallback, useState } from "react";
 import * as XLSX from "xlsx";
-import { Upload, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Upload, AlertTriangle, CheckCircle2, Download } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import type { RetoFormData, SociaRow } from "../RetoWizard";
 
 interface Props {
   form: RetoFormData;
   setForm: (f: RetoFormData) => void;
+  showValidation?: boolean;
 }
 
 const REQUIRED_COLS = ["id_socia", "nombre", "telefono", "tienda_visita", "baseline_mensual"];
 
-export function WizardStep2({ form, setForm }: Props) {
+export function WizardStep2({ form, setForm, showValidation }: Props) {
   const [dragOver, setDragOver] = useState(false);
   const [fileName, setFileName] = useState("");
 
@@ -85,6 +87,16 @@ export function WizardStep2({ form, setForm }: Props) {
     if (file) processFile(file);
   }, [processFile]);
 
+  const handleDownloadTemplate = () => {
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([
+      ["id_socia", "nombre", "telefono", "tienda_visita", "baseline_mensual"],
+      ["PS000001", "Nombre de ejemplo", "5512345678", "Tienda Centro", 5000],
+    ]);
+    XLSX.utils.book_append_sheet(wb, ws, "Socias");
+    XLSX.writeFile(wb, "plantilla_socias.xlsx");
+  };
+
   const updateMeta = (idx: number, val: number) => {
     const next = [...form.socias];
     next[idx] = { ...next[idx], meta_individual: val };
@@ -93,6 +105,7 @@ export function WizardStep2({ form, setForm }: Props) {
 
   const validCount = form.socias.filter((s) => !s.error).length;
   const errorCount = form.socias.filter((s) => s.error).length;
+  const noData = form.socias.length === 0 || validCount === 0;
 
   return (
     <div className="space-y-6">
@@ -101,7 +114,7 @@ export function WizardStep2({ form, setForm }: Props) {
         onDragLeave={() => setDragOver(false)}
         onDrop={handleDrop}
         className={`relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 transition-colors ${
-          dragOver ? "border-primary bg-primary/5" : "border-border"
+          dragOver ? "border-primary bg-primary/5" : showValidation && noData ? "border-destructive" : "border-border"
         }`}
       >
         <Upload className="mb-3 h-10 w-10 text-muted-foreground" />
@@ -114,6 +127,21 @@ export function WizardStep2({ form, setForm }: Props) {
           className="absolute inset-0 cursor-pointer opacity-0"
         />
       </div>
+
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-muted-foreground">
+          Columnas requeridas: <span className="font-mono text-foreground/80">id_socia, nombre, telefono, tienda_visita, baseline_mensual</span>
+        </p>
+        <Button variant="link" size="sm" className="text-xs h-auto p-0" onClick={handleDownloadTemplate}>
+          <Download className="mr-1 h-3 w-3" /> Descargar plantilla
+        </Button>
+      </div>
+
+      {showValidation && noData && (
+        <p className="text-sm text-destructive flex items-center gap-1.5">
+          <AlertTriangle className="h-4 w-4" /> Carga un archivo Excel con las socias participantes para continuar
+        </p>
+      )}
 
       {fileName && (
         <p className="text-sm text-muted-foreground">

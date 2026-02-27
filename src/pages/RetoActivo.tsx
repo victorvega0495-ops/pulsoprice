@@ -5,26 +5,32 @@ import { useAuth } from "@/contexts/AuthContext";
 import { RetoWizard } from "@/components/reto/RetoWizard";
 import { RetoPanel } from "@/components/reto/RetoPanel";
 import { Button } from "@/components/ui/button";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { Rocket } from "lucide-react";
 
 export default function RetoActivo() {
   const { profile } = useAuth();
   const [showWizard, setShowWizard] = useState(false);
+  const [selectedRetoId, setSelectedRetoId] = useState<string>("auto");
 
-  const { data: retoActivo, isLoading, refetch } = useQuery({
-    queryKey: ["reto-activo"],
+  const { data: retosDisponibles = [], isLoading, refetch } = useQuery({
+    queryKey: ["retos-disponibles"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("retos")
         .select("*")
-        .in("estado", ["publicado", "activo"])
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .in("estado", ["publicado", "activo", "en_cierre"])
+        .order("created_at", { ascending: false });
       if (error) throw error;
-      return data;
+      return data || [];
     },
   });
+
+  const retoActivo = selectedRetoId === "auto"
+    ? (retosDisponibles.find((r: any) => r.estado === "activo") || retosDisponibles[0] || null)
+    : retosDisponibles.find((r: any) => r.id === selectedRetoId) || null;
 
   if (isLoading) {
     return (
@@ -38,7 +44,7 @@ export default function RetoActivo() {
     return <RetoWizard onClose={() => setShowWizard(false)} onPublished={() => { setShowWizard(false); refetch(); }} />;
   }
 
-  if (!retoActivo) {
+  if (retosDisponibles.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-24">
         <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-primary/10">
@@ -48,13 +54,31 @@ export default function RetoActivo() {
         <p className="mb-6 text-muted-foreground">Crea un nuevo reto para comenzar a operar</p>
         {(profile?.rol === "director" || profile?.rol === "gerente") && (
           <Button size="lg" onClick={() => setShowWizard(true)}>
-            <Rocket className="mr-2 h-5 w-5" />
-            Crear Nuevo Reto
+            <Rocket className="mr-2 h-5 w-5" /> Crear Nuevo Reto
           </Button>
         )}
       </div>
     );
   }
 
-  return <RetoPanel reto={retoActivo} onRefresh={refetch} />;
+  return (
+    <div className="space-y-4">
+      {retosDisponibles.length > 1 && (
+        <Select value={selectedRetoId} onValueChange={setSelectedRetoId}>
+          <SelectTrigger className="w-72">
+            <SelectValue placeholder="Seleccionar reto" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="auto">Reto activo más reciente</SelectItem>
+            {retosDisponibles.map((r: any) => (
+              <SelectItem key={r.id} value={r.id}>
+                {r.nombre} ({r.estado})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+      {retoActivo && <RetoPanel reto={retoActivo} onRefresh={refetch} />}
+    </div>
+  );
 }

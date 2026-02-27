@@ -141,7 +141,7 @@ export default function ColaTrabajo() {
     },
   });
 
-  const operadores = usuarios.filter((u: any) => ["operador", "gerente"].includes(u.rol));
+  const equipo = usuarios.filter((u: any) => ["coordinador", "desarrolladora", "gerente", "operador"].includes(u.rol));
 
   const filtered = acciones.filter((a: any) => {
     if (filter === "urgentes") return a.prioridad === "urgente";
@@ -337,11 +337,11 @@ export default function ColaTrabajo() {
         {isManager && (
           <Select value={filterOperador} onValueChange={(v) => { setFilterOperador(v); setFilter("todas"); }}>
             <SelectTrigger className="w-48">
-              <SelectValue placeholder="Filtrar por operador" />
+              <SelectValue placeholder="Filtrar por equipo" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="todos">Todos los operadores</SelectItem>
-              {operadores.map((u: any) => (
+              <SelectItem value="todos">Todo el equipo</SelectItem>
+              {equipo.map((u: any) => (
                 <SelectItem key={u.auth_id} value={u.auth_id}>{u.nombre}</SelectItem>
               ))}
             </SelectContent>

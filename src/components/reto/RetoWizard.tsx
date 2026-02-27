@@ -44,6 +44,7 @@ interface Props {
 
 export function RetoWizard({ onClose, onPublished }: Props) {
   const [step, setStep] = useState(0);
+  const [triedNext, setTriedNext] = useState(false);
   const [form, setForm] = useState<RetoFormData>({
     nombre: "",
     fecha_inicio: undefined,
@@ -104,7 +105,7 @@ export function RetoWizard({ onClose, onPublished }: Props) {
 
       <div className="rounded-lg border bg-card p-6">
         {step === 0 && <WizardStep1 form={form} setForm={setForm} />}
-        {step === 1 && <WizardStep2 form={form} setForm={setForm} />}
+        {step === 1 && <WizardStep2 form={form} setForm={setForm} showValidation={triedNext} />}
         {step === 2 && <WizardStep3 form={form} setForm={setForm} />}
         {step === 3 && <WizardStep4 form={form} setForm={setForm} />}
         {step === 4 && <WizardStep5 form={form} onPublished={onPublished} />}
@@ -116,7 +117,7 @@ export function RetoWizard({ onClose, onPublished }: Props) {
           {step === 0 ? "Cancelar" : "Anterior"}
         </Button>
         {step < 4 && (
-          <Button onClick={() => setStep(step + 1)} disabled={!canNext()}>
+          <Button onClick={() => { if (canNext()) { setTriedNext(false); setStep(step + 1); } else { setTriedNext(true); } }}>
             Siguiente
             <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
