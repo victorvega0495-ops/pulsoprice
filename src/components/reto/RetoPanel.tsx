@@ -111,7 +111,7 @@ export function RetoPanel({ reto, onRefresh }: Props) {
   const { data: mentoras = [] } = useQuery({
     queryKey: ["mentoras-panel"],
     queryFn: async () => {
-      const { data } = await supabase.from("mentoras").select("id, nombre").eq("activa", true);
+      const { data } = await supabase.from("mentoras").select("id, nombre, usuario_id").eq("activa", true);
       return data || [];
     },
   });
@@ -219,7 +219,7 @@ export function RetoPanel({ reto, onRefresh }: Props) {
     const coordMap = new Map<string, { nombre: string; socias: any[]; mentoraSubs: Map<string, { nombre: string; socias: any[] }> }>();
     for (const s of socias) {
       const cId = s.coordinador_id || "sin_coordinador";
-      const cNombre = cId === "sin_coordinador" ? "Sin coordinador" : (usuarios.find((u: any) => u.auth_id === cId)?.nombre || "Coordinador");
+      const cNombre = cId === "sin_coordinador" ? "Sin coordinador" : (usuarios.find((u: any) => u.id === cId)?.nombre || "Coordinador");
       if (!coordMap.has(cId)) coordMap.set(cId, { nombre: cNombre, socias: [], mentoraSubs: new Map() });
       const coord = coordMap.get(cId)!;
       coord.socias.push(s);
@@ -256,7 +256,7 @@ export function RetoPanel({ reto, onRefresh }: Props) {
       const mSocias = socias.filter((s: any) => s.mentora_id === mId);
       const mNombre = mentoras.find((m: any) => m.id === mId)?.nombre || "Mentora";
       const coordId = mSocias[0]?.coordinador_id;
-      const coordNombre = coordId ? (usuarios.find((u: any) => u.auth_id === coordId)?.nombre || "—") : "—";
+      const coordNombre = coordId ? (usuarios.find((u: any) => u.id === coordId)?.nombre || "—") : "—";
       const totalM = mSocias.length;
       const conCompra = mSocias.filter((s: any) => Number(s.venta_acumulada) > 0).length;
       const enRiesgoM = mSocias.filter((s: any) => s.estado === "en_riesgo").length;
@@ -436,6 +436,13 @@ export function RetoPanel({ reto, onRefresh }: Props) {
             idToAuth[u.id] = u.auth_id;
             if (u.rol === "gerente") gerenteAuthId = u.auth_id;
           }
+          // Build mentora lookup: mentoras.id → usuarios.id (via usuario_id)
+          const { data: mentorasLookup } = await supabase
+            .from("mentoras").select("id, usuario_id").eq("activa", true);
+          const mentoraIdToUsuarioId: Record<string, string> = {};
+          for (const m of (mentorasLookup || [])) {
+            if (m.usuario_id) mentoraIdToUsuarioId[m.id] = m.usuario_id;
+          }
           const semUpload = getSemana(fechaHoy);
           for (const regla of reglasActivas) {
             if (!regla.semanas_activas?.includes(semUpload)) continue;
@@ -451,8 +458,13 @@ export function RetoPanel({ reto, onRefresh }: Props) {
                 asignadaA = idToAuth[soc.coordinador_id];
               } else if (regla.asignar_a_rol === "desarrolladora" && soc.desarrolladora_id && idToAuth[soc.desarrolladora_id]) {
                 asignadaA = idToAuth[soc.desarrolladora_id];
-              } else if (regla.asignar_a_rol === "mentora" && soc.mentora_id && idToAuth[soc.mentora_id]) {
-                asignadaA = idToAuth[soc.mentora_id];
+              } else if (regla.asignar_a_rol === "mentora" && soc.mentora_id) {
+                const usuarioId = mentoraIdToUsuarioId[soc.mentora_id];
+                if (usuarioId && idToAuth[usuarioId]) {
+                  asignadaA = idToAuth[usuarioId];
+                } else if (soc.coordinador_id && idToAuth[soc.coordinador_id]) {
+                  asignadaA = idToAuth[soc.coordinador_id]; // fallback to coordinador
+                }
               } else if (regla.asignar_a_rol === "gerente") {
                 asignadaA = gerenteAuthId;
               }

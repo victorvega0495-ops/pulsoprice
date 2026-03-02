@@ -77,6 +77,7 @@ export default function ColaTrabajo() {
   const [fichaOpen, setFichaOpen] = useState<string | null>(null);
 
   const isManager = profile?.rol === "director" || profile?.rol === "gerente";
+  const isMentora = profile?.rol === "mentora";
 
   // Fetch retos for filter (include closed/cancelled for display but flag them)
   const { data: retosDisponibles = [] } = useQuery({
@@ -157,7 +158,7 @@ export default function ColaTrabajo() {
     },
   });
 
-  const equipo = usuarios.filter((u: any) => ["coordinador", "desarrolladora", "gerente"].includes(u.rol));
+  const equipo = usuarios.filter((u: any) => ["coordinador", "desarrolladora", "gerente", "mentora"].includes(u.rol));
 
   // Build lookup for both id and auth_id so filter works with old and new data
   const authToId: Record<string, string> = {};
@@ -348,6 +349,13 @@ export default function ColaTrabajo() {
         uIdToAuth[u.id] = u.auth_id;
         if (u.rol === "gerente") gerenteAuth = u.auth_id;
       }
+      // Mentora lookup
+      const { data: mentorasLookup } = await supabase
+        .from("mentoras").select("id, usuario_id").eq("activa", true);
+      const mentoraIdToUsuarioId: Record<string, string> = {};
+      for (const m of (mentorasLookup || [])) {
+        if (m.usuario_id) mentoraIdToUsuarioId[m.id] = m.usuario_id;
+      }
       let updated = 0;
       for (const accion of pendientes) {
         const rol = accion.regla_id ? reglaMap[accion.regla_id] : null;
@@ -358,8 +366,13 @@ export default function ColaTrabajo() {
           newAsignada = uIdToAuth[socia.coordinador_id];
         } else if (rol === "desarrolladora" && socia.desarrolladora_id && uIdToAuth[socia.desarrolladora_id]) {
           newAsignada = uIdToAuth[socia.desarrolladora_id];
-        } else if (rol === "mentora" && socia.mentora_id && uIdToAuth[socia.mentora_id]) {
-          newAsignada = uIdToAuth[socia.mentora_id];
+        } else if (rol === "mentora" && socia.mentora_id) {
+          const usuarioId = mentoraIdToUsuarioId[socia.mentora_id];
+          if (usuarioId && uIdToAuth[usuarioId]) {
+            newAsignada = uIdToAuth[usuarioId];
+          } else if (socia.coordinador_id && uIdToAuth[socia.coordinador_id]) {
+            newAsignada = uIdToAuth[socia.coordinador_id];
+          }
         }
         if (newAsignada !== accion.asignada_a) {
           await supabase.from("acciones_operativas").update({ asignada_a: newAsignada }).eq("id", accion.id);
@@ -393,7 +406,7 @@ export default function ColaTrabajo() {
             {acciones.length} pendientes · {urgentes} urgentes
           </p>
         </div>
-        {isManager && (
+        {isManager && !isMentora && (
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={handleReasignar} disabled={reasignando}>
               {reasignando ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <ArrowUpRight className="mr-1.5 h-3.5 w-3.5" />}
@@ -438,7 +451,7 @@ export default function ColaTrabajo() {
             <TabsTrigger value="ia">IA</TabsTrigger>
           </TabsList>
         </Tabs>
-        {isManager && (
+        {isManager && !isMentora && (
           <Select value={filterOperador} onValueChange={(v) => { setFilterOperador(v); setFilter("todas"); }}>
             <SelectTrigger className="w-48">
               <SelectValue placeholder="Filtrar por equipo" />
@@ -446,7 +459,7 @@ export default function ColaTrabajo() {
             <SelectContent>
               <SelectItem value="todos">Todo el equipo</SelectItem>
               {equipo.map((u: any) => (
-                <SelectItem key={u.auth_id} value={u.auth_id}>{u.nombre}</SelectItem>
+                <SelectItem key={u.auth_id} value={u.auth_id}>{u.nombre} ({u.rol})</SelectItem>
               ))}
             </SelectContent>
           </Select>

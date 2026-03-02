@@ -59,7 +59,8 @@ function getNavItems(rol: string): NavItem[] {
       ];
     case "mentora":
       return [
-        { title: "Mis Pendientes", url: "/pendientes", icon: ListTodo },
+        { title: "Cola de Trabajo", url: "/cola-trabajo", icon: ListTodo },
+        { title: "Reto Activo", url: "/reto-activo", icon: Trophy },
       ];
     default:
       return [];
