@@ -295,7 +295,7 @@ export function SociaFicha({ sociaId, retoId, open, onClose }: SociaFichaProps) 
             <div className="flex flex-wrap gap-2">
               {socia.telefono && (
                 <Button size="sm" variant="outline" asChild>
-                  <a href={`https://wa.me/${socia.telefono.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer">
+                  <a href={`https://wa.me/52${socia.telefono.replace(/\D/g, "")}?text=${encodeURIComponent(`Hola ${socia.nombre}, soy tu asesora del Reto Price Shoes`)}`} target="_blank" rel="noopener noreferrer">
                     <MessageSquare className="mr-1.5 h-3.5 w-3.5" /> WhatsApp
                   </a>
                 </Button>
