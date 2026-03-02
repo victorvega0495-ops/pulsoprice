@@ -34,6 +34,7 @@ export function WizardStep3({ form, setForm }: Props) {
     processed: number;
     counts: string[];
     errors: string[];
+    matchLog: string[];
   } | null>(null);
 
   // Ref to always have latest form in async callbacks (avoids stale closure)
@@ -109,10 +110,47 @@ export function WizardStep3({ form, setForm }: Props) {
         const ws = wb.Sheets[wb.SheetNames[0]];
         const rows: any[] = XLSX.utils.sheet_to_json(ws);
 
-        // Build assignment map from Excel
+        // DEBUG: Log available data for matching
+        const excelEmails = new Set<string>();
+        const excelMentNames = new Set<string>();
+        rows.forEach(r => {
+          if (r.coordinador) excelEmails.add(String(r.coordinador).trim());
+          if (r.desarrolladora) excelEmails.add(String(r.desarrolladora).trim());
+          if (r.mentora) excelMentNames.add(String(r.mentora).trim());
+        });
+        console.log("=== DEBUG EXCEL ASIGNACIONES ===");
+        console.log("Emails únicos del Excel:", [...excelEmails]);
+        console.log("Nombres mentoras del Excel:", [...excelMentNames]);
+        console.log("Coordinadores en BD:", coordinadores.map((u: any) => ({ id: u.id, email: u.email, nombre: u.nombre })));
+        console.log("Desarrolladoras en BD:", desarrolladoras.map((u: any) => ({ id: u.id, email: u.email, nombre: u.nombre })));
+        console.log("Mentoras en BD:", mentoras.map((m: any) => ({ id: m.id, nombre: m.nombre })));
+
         const assignmentMap = new Map<string, { coordinador_id?: string; desarrolladora_id?: string; mentora_id?: string }>();
         const errors: string[] = [];
+        const matchLog: string[] = [];
         let processed = 0;
+
+        // Helper: tolerant email match
+        const findByEmail = (list: any[], rawEmail: string) => {
+          const email = rawEmail.trim().toLowerCase();
+          // Exact match first
+          let found = list.find((u: any) => u.email.trim().toLowerCase() === email);
+          if (found) return found;
+          // Partial match: check if email contains or is contained
+          found = list.find((u: any) => u.email.trim().toLowerCase().includes(email) || email.includes(u.email.trim().toLowerCase()));
+          return found || null;
+        };
+
+        // Helper: tolerant name match for mentoras
+        const findMentora = (rawName: string) => {
+          const name = rawName.trim().toLowerCase();
+          // Exact match
+          let found = mentoras.find((m: any) => m.nombre.trim().toLowerCase() === name);
+          if (found) return found;
+          // Partial/includes match
+          found = mentoras.find((m: any) => m.nombre.trim().toLowerCase().includes(name) || name.includes(m.nombre.trim().toLowerCase()));
+          return found || null;
+        };
 
         for (const row of rows) {
           const idSocia = String(row.id_socia || "").trim();
@@ -120,37 +158,61 @@ export function WizardStep3({ form, setForm }: Props) {
 
           const assignment: { coordinador_id?: string; desarrolladora_id?: string; mentora_id?: string } = {};
 
-          const coordEmail = String(row.coordinador || "").trim().toLowerCase();
+          const coordEmail = String(row.coordinador || "").trim();
           if (coordEmail) {
-            const u = coordinadores.find((u: any) => u.email.toLowerCase() === coordEmail);
-            if (u) assignment.coordinador_id = u.id;
-            else errors.push(`${idSocia}: coordinador "${coordEmail}" no encontrado`);
+            const u = findByEmail(coordinadores, coordEmail);
+            if (u) {
+              assignment.coordinador_id = u.id;
+              matchLog.push(`✅ ${idSocia} coord: "${coordEmail}" → ${u.nombre}`);
+            } else {
+              errors.push(`${idSocia}: coordinador "${coordEmail}" no encontrado`);
+              matchLog.push(`❌ ${idSocia} coord: "${coordEmail}" → NO ENCONTRADO`);
+            }
           }
 
-          const desaEmail = String(row.desarrolladora || "").trim().toLowerCase();
+          const desaEmail = String(row.desarrolladora || "").trim();
           if (desaEmail) {
-            const u = desarrolladoras.find((u: any) => u.email.toLowerCase() === desaEmail);
-            if (u) assignment.desarrolladora_id = u.id;
-            else errors.push(`${idSocia}: desarrolladora "${desaEmail}" no encontrada`);
+            const u = findByEmail(desarrolladoras, desaEmail);
+            if (u) {
+              assignment.desarrolladora_id = u.id;
+              matchLog.push(`✅ ${idSocia} desa: "${desaEmail}" → ${u.nombre}`);
+            } else {
+              errors.push(`${idSocia}: desarrolladora "${desaEmail}" no encontrada`);
+              matchLog.push(`❌ ${idSocia} desa: "${desaEmail}" → NO ENCONTRADA`);
+            }
           }
 
-          const mentNombre = String(row.mentora || "").trim().toLowerCase();
+          const mentNombre = String(row.mentora || "").trim();
           if (mentNombre) {
-            const m = mentoras.find((m: any) => m.nombre.toLowerCase() === mentNombre);
-            if (m) assignment.mentora_id = m.id;
-            else errors.push(`${idSocia}: mentora "${mentNombre}" no encontrada`);
+            const m = findMentora(mentNombre);
+            if (m) {
+              assignment.mentora_id = m.id;
+              matchLog.push(`✅ ${idSocia} mentora: "${mentNombre}" → ${m.nombre}`);
+            } else {
+              errors.push(`${idSocia}: mentora "${mentNombre}" no encontrada`);
+              matchLog.push(`❌ ${idSocia} mentora: "${mentNombre}" → NO ENCONTRADA`);
+            }
           }
 
           assignmentMap.set(idSocia, assignment);
           processed++;
         }
 
-        // Use formRef to get latest form state (avoids stale closure from async FileReader)
+        console.log("Assignments map size:", assignmentMap.size);
+        console.log("Sample assignments:", [...assignmentMap.entries()].slice(0, 3));
+
+        // Use formRef to get latest form state
         const currentForm = formRef.current;
+        
+        console.log("Current socias count:", currentForm.socias.length);
+        console.log("Sample socia ids:", currentForm.socias.slice(0, 5).map(s => s.id_socia));
+
+        let matchedCount = 0;
         const updatedSocias = currentForm.socias.map(s => {
           if (s.error) return s;
           const a = assignmentMap.get(s.id_socia);
           if (!a) return s;
+          matchedCount++;
           return {
             ...s,
             ...(a.coordinador_id !== undefined && { coordinador_id: a.coordinador_id }),
@@ -159,14 +221,18 @@ export function WizardStep3({ form, setForm }: Props) {
           };
         });
 
+        console.log("Socias matched with assignments:", matchedCount);
+        console.log("Sample updated socia:", updatedSocias.find(s => s.coordinador_id));
+
         // Check for socias in Excel but not in wizard
         for (const idSocia of assignmentMap.keys()) {
           if (!currentForm.socias.some(s => s.id_socia === idSocia && !s.error)) {
             errors.push(`${idSocia}: socia no encontrada en paso 2`);
+            matchLog.push(`⚠️ ${idSocia}: no existe en socias del wizard`);
           }
         }
 
-        // Build counts from the updated array
+        // Build counts
         const counts: string[] = [];
         const coordCounts: Record<string, number> = {};
         const desaCounts: Record<string, number> = {};
@@ -180,10 +246,14 @@ export function WizardStep3({ form, setForm }: Props) {
         if (Object.keys(desaCounts).length) counts.push(`Desarrolladoras: ${Object.entries(desaCounts).map(([n, c]) => `${n} (${c})`).join(", ")}`);
         if (Object.keys(mentCounts).length) counts.push(`Mentoras: ${Object.entries(mentCounts).map(([n, c]) => `${n} (${c})`).join(", ")}`);
 
-        setExcelResult({ processed, counts, errors });
+        console.log("Counts:", counts);
+        console.log("Errors:", errors);
+
+        setExcelResult({ processed, counts, errors, matchLog });
         setForm({ ...currentForm, socias: updatedSocias });
-        toast({ title: "✅ Asignaciones guardadas", description: `${processed} socias procesadas, ${errors.length} errores` });
+        toast({ title: "✅ Asignaciones guardadas", description: `${processed} socias, ${matchedCount} asignadas, ${errors.length} errores` });
       } catch (err: any) {
+        console.error("Excel processing error:", err);
         toast({ title: "Error al leer Excel", description: err.message, variant: "destructive" });
       }
     };
@@ -358,11 +428,11 @@ export function WizardStep3({ form, setForm }: Props) {
             </label>
           </div>
           {excelResult && (
-            <div className="space-y-2 rounded-lg border bg-card p-4">
+            <div className="space-y-3 rounded-lg border bg-card p-4">
               <h4 className="text-sm font-semibold">Resultado de carga</h4>
               <p className="text-sm">{excelResult.processed} socias procesadas</p>
               {excelResult.counts.map((line, i) => (
-                <p key={i} className="text-sm text-muted-foreground">{line}</p>
+                <p key={i} className="text-sm font-medium">{line}</p>
               ))}
               {excelResult.errors.length > 0 && (
                 <div className="mt-2 space-y-1">
@@ -372,6 +442,21 @@ export function WizardStep3({ form, setForm }: Props) {
                   ))}
                   {excelResult.errors.length > 10 && <p className="text-xs text-muted-foreground">...y {excelResult.errors.length - 10} más</p>}
                 </div>
+              )}
+              {/* Match log for debugging */}
+              {excelResult.matchLog.length > 0 && (
+                <details className="mt-3">
+                  <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                    Ver detalle de matching ({excelResult.matchLog.length} operaciones)
+                  </summary>
+                  <div className="mt-2 max-h-48 overflow-y-auto space-y-0.5 rounded border p-2 bg-muted/30">
+                    {excelResult.matchLog.map((line, i) => (
+                      <p key={i} className={`text-xs font-mono ${line.startsWith("✅") ? "text-emerald-500" : line.startsWith("❌") ? "text-destructive" : "text-yellow-500"}`}>
+                        {line}
+                      </p>
+                    ))}
+                  </div>
+                </details>
               )}
             </div>
           )}
