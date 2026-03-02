@@ -109,22 +109,65 @@ export function WizardStep3({ form, setForm }: Props) {
       try {
         const wb = XLSX.read(e.target?.result, { type: "binary" });
         const ws = wb.Sheets[wb.SheetNames[0]];
-        const rows: any[] = XLSX.utils.sheet_to_json(ws);
+        // Use header:1 to get raw arrays — avoids header-name issues with BOM/spaces
+        const rawData: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
 
-        // DEBUG: Log available data for matching
+        if (rawData.length < 2) {
+          toast({ title: "Excel vacío o sin datos", variant: "destructive" });
+          return;
+        }
+
+        // Flexible column detection helpers
+        const normalize = (s: string) =>
+          (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[_\s]+/g, " ").trim();
+
+        const findColIndex = (headers: string[], possibleNames: string[]): number => {
+          const nh = headers.map(h => normalize(String(h || "")));
+          const nn = possibleNames.map(normalize);
+          for (const name of nn) { const idx = nh.indexOf(name); if (idx !== -1) return idx; }
+          for (const name of nn) { const idx = nh.findIndex(h => h.startsWith(name)); if (idx !== -1) return idx; }
+          for (const name of nn) { const idx = nh.findIndex(h => h.includes(name)); if (idx !== -1) return idx; }
+          return -1;
+        };
+
+        const headers = (rawData[0] || []).map(h => String(h || ""));
+        const dataRows = rawData.slice(1).filter(r => r && r.length > 0);
+
+        const idIdx = findColIndex(headers, ["id_socia", "id socia", "id", "socia"]);
+        const coordIdx = findColIndex(headers, ["coordinador", "coord", "coordinadora"]);
+        const devIdx = findColIndex(headers, ["desarrolladora", "dev", "desarr", "desarrollo"]);
+        const mentIdx = findColIndex(headers, ["mentora", "ment"]);
+
+        console.log("=== DEBUG EXCEL ASIGNACIONES ===");
+        console.log("Headers encontrados:", headers);
+        console.log("Índices:", { idIdx, coordIdx, devIdx, mentIdx });
+
+        if (idIdx === -1) {
+          toast({ title: "No se encontró columna 'id_socia'", description: `Headers: ${headers.join(", ")}`, variant: "destructive" });
+          return;
+        }
+
+        // Extract unique values for debug
         const excelEmails = new Set<string>();
         const excelMentNames = new Set<string>();
-        rows.forEach(r => {
-          if (r.coordinador) excelEmails.add(String(r.coordinador).trim());
-          if (r.desarrolladora) excelEmails.add(String(r.desarrolladora).trim());
-          if (r.mentora) excelMentNames.add(String(r.mentora).trim());
-        });
-        console.log("=== DEBUG EXCEL ASIGNACIONES ===");
+        for (const row of dataRows) {
+          if (coordIdx >= 0 && row[coordIdx]) excelEmails.add(String(row[coordIdx]).trim());
+          if (devIdx >= 0 && row[devIdx]) excelEmails.add(String(row[devIdx]).trim());
+          if (mentIdx >= 0 && row[mentIdx]) excelMentNames.add(String(row[mentIdx]).trim());
+        }
         console.log("Emails únicos del Excel:", [...excelEmails]);
         console.log("Nombres mentoras del Excel:", [...excelMentNames]);
         console.log("Coordinadores en BD:", (coordinadores || []).map((u: any) => ({ id: u.id, email: u.email, nombre: u.nombre })));
         console.log("Desarrolladoras en BD:", (desarrolladoras || []).map((u: any) => ({ id: u.id, email: u.email, nombre: u.nombre })));
         console.log("Mentoras en BD:", (mentoras || []).map((m: any) => ({ id: m.id, nombre: m.nombre })));
+        if (dataRows.length > 0) {
+          console.log("Primera fila parseada:", {
+            id_socia: String(dataRows[0][idIdx] || ""),
+            coord: coordIdx >= 0 ? String(dataRows[0][coordIdx] || "") : "N/A",
+            dev: devIdx >= 0 ? String(dataRows[0][devIdx] || "") : "N/A",
+            mentora: mentIdx >= 0 ? String(dataRows[0][mentIdx] || "") : "N/A",
+          });
+        }
 
         const assignmentMap = new Map<string, { coordinador_id?: string; desarrolladora_id?: string; mentora_id?: string }>();
         const errors: string[] = [];
@@ -135,9 +178,13 @@ export function WizardStep3({ form, setForm }: Props) {
         const findByEmail = (list: any[] | undefined, rawEmail: string) => {
           const safeList = list || [];
           const email = rawEmail.trim().toLowerCase();
-          let found = safeList.find((u: any) => u.email?.trim().toLowerCase() === email);
+          if (!email) return null;
+          let found = safeList.find((u: any) => (u.email || "").trim().toLowerCase() === email);
           if (found) return found;
-          found = safeList.find((u: any) => u.email?.trim().toLowerCase().includes(email) || email.includes(u.email?.trim().toLowerCase()));
+          found = safeList.find((u: any) => {
+            const ue = (u.email || "").trim().toLowerCase();
+            return ue.includes(email) || email.includes(ue);
+          });
           return found || null;
         };
 
@@ -145,19 +192,23 @@ export function WizardStep3({ form, setForm }: Props) {
         const findMentora = (rawName: string) => {
           const safeMentoras = mentoras || [];
           const name = rawName.trim().toLowerCase();
-          let found = safeMentoras.find((m: any) => m.nombre?.trim().toLowerCase() === name);
+          if (!name) return null;
+          let found = safeMentoras.find((m: any) => (m.nombre || "").trim().toLowerCase() === name);
           if (found) return found;
-          found = safeMentoras.find((m: any) => m.nombre?.trim().toLowerCase().includes(name) || name.includes(m.nombre?.trim().toLowerCase()));
+          found = safeMentoras.find((m: any) => {
+            const mn = (m.nombre || "").trim().toLowerCase();
+            return mn.includes(name) || name.includes(mn);
+          });
           return found || null;
         };
 
-        for (const row of rows) {
-          const idSocia = String(row.id_socia || "").trim();
+        for (const row of dataRows) {
+          const idSocia = String(row[idIdx] ?? "").trim();
           if (!idSocia) continue;
 
           const assignment: { coordinador_id?: string; desarrolladora_id?: string; mentora_id?: string } = {};
 
-          const coordEmail = String(row.coordinador || "").trim();
+          const coordEmail = coordIdx >= 0 ? String(row[coordIdx] ?? "").trim() : "";
           if (coordEmail) {
             const u = findByEmail(coordinadores, coordEmail);
             if (u) {
@@ -169,7 +220,7 @@ export function WizardStep3({ form, setForm }: Props) {
             }
           }
 
-          const desaEmail = String(row.desarrolladora || "").trim();
+          const desaEmail = devIdx >= 0 ? String(row[devIdx] ?? "").trim() : "";
           if (desaEmail) {
             const u = findByEmail(desarrolladoras, desaEmail);
             if (u) {
@@ -181,7 +232,7 @@ export function WizardStep3({ form, setForm }: Props) {
             }
           }
 
-          const mentNombre = String(row.mentora || "").trim();
+          const mentNombre = mentIdx >= 0 ? String(row[mentIdx] ?? "").trim() : "";
           if (mentNombre) {
             const m = findMentora(mentNombre);
             if (m) {
