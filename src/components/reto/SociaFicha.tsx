@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -63,6 +63,9 @@ export function SociaFicha({ sociaId, retoId, open, onClose }: SociaFichaProps) 
   const [comentario, setComentario] = useState("");
   const [resultadoLlamada, setResultadoLlamada] = useState("");
   const [nuevaG, setNuevaG] = useState("");
+  const [editingTel, setEditingTel] = useState(false);
+  const [telValue, setTelValue] = useState("");
+  const telInputRef = useRef<HTMLInputElement>(null);
 
   const isManager = profile?.rol === "director" || profile?.rol === "gerente";
 
@@ -229,10 +232,40 @@ export function SociaFicha({ sociaId, retoId, open, onClose }: SociaFichaProps) 
               <div>
                 <h2 className="text-xl font-bold">{socia.nombre}</h2>
                 <div className="flex flex-wrap items-center gap-2 mt-1 text-sm text-muted-foreground">
-                  {socia.telefono && (
-                    <a href={`https://wa.me/${socia.telefono.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:underline">
-                      {socia.telefono}
-                    </a>
+                  {editingTel ? (
+                    <input
+                      ref={telInputRef}
+                      autoFocus
+                      type="tel"
+                      maxLength={10}
+                      className="bg-secondary border border-border rounded px-2 py-0.5 text-sm w-32 outline-none focus:ring-1 focus:ring-primary"
+                      placeholder="5512345678"
+                      value={telValue}
+                      onChange={(e) => setTelValue(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                      onBlur={async () => {
+                        const clean = telValue.replace(/\D/g, "");
+                        if (clean && clean.length !== 10) {
+                          toast({ title: "El teléfono debe tener 10 dígitos", variant: "destructive" });
+                          return;
+                        }
+                        await supabase.from("socias_reto").update({ telefono: clean || null }).eq("id", socia.id);
+                        queryClient.invalidateQueries({ queryKey: ["socia-ficha", sociaId] });
+                        toast({ title: "Teléfono actualizado" });
+                        setEditingTel(false);
+                      }}
+                      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") setEditingTel(false); }}
+                    />
+                  ) : socia.telefono ? (
+                    <span className="flex items-center gap-1.5">
+                      <a href={`https://wa.me/52${socia.telefono.replace(/\D/g, "")}?text=${encodeURIComponent(`Hola ${socia.nombre}, soy tu asesora del Reto Price Shoes`)}`} target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:underline">
+                        {socia.telefono}
+                      </a>
+                      <button onClick={() => { setTelValue(socia.telefono || ""); setEditingTel(true); }} className="text-muted-foreground/50 hover:text-foreground text-xs">✏️</button>
+                    </span>
+                  ) : (
+                    <button onClick={() => { setTelValue(""); setEditingTel(true); }} className="text-muted-foreground/60 hover:text-foreground text-xs italic">
+                      Sin teléfono — click para agregar
+                    </button>
                   )}
                   {socia.tienda_visita && <span>· {socia.tienda_visita}</span>}
                 </div>
