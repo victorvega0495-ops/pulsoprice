@@ -6,6 +6,7 @@ import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
+import { evaluateCondition } from "@/lib/rules-engine";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -30,39 +31,7 @@ interface Props {
   onRefresh: () => void;
 }
 
-function evaluateCondition(regla: any, socia: any): boolean {
-  const evalSingle = (campo: string, op: string, valor: string): boolean => {
-    let actual: any;
-    switch (campo) {
-      case "dias_sin_compra": actual = Number(socia.dias_sin_compra); break;
-      case "pct_avance": actual = Number(socia.pct_avance); break;
-      case "venta_acumulada": actual = Number(socia.venta_acumulada); break;
-      case "venta_semanal": actual = Number(socia.venta_semanal); break;
-      case "estado": actual = socia.estado; break;
-      case "g_probable": actual = socia.graduacion_probable; break;
-      case "primera_compra":
-        return valor === "true" ? Number(socia.venta_acumulada) > 0 && Number(socia.venta_acumulada) === Number(socia.venta_semanal) : false;
-      case "crediprice_activo":
-        return valor === "true" ? socia.crediprice_activo === true : socia.crediprice_activo === false;
-      default: return false;
-    }
-    const numVal = Number(valor);
-    const isNum = !isNaN(numVal) && !isNaN(actual);
-    switch (op) {
-      case ">=": return isNum ? actual >= numVal : false;
-      case "<=": return isNum ? actual <= numVal : false;
-      case ">": return isNum ? actual > numVal : false;
-      case "<": return isNum ? actual < numVal : false;
-      case "=": return isNum ? actual === numVal : String(actual) === valor;
-      default: return false;
-    }
-  };
-
-  const result1 = evalSingle(regla.campo, regla.operador, regla.valor);
-  if (!regla.condicion_extra || !regla.campo2) return result1;
-  const result2 = evalSingle(regla.campo2, regla.operador2, regla.valor2);
-  return regla.logica_extra === "OR" ? result1 || result2 : result1 && result2;
-}
+// evaluateCondition is now imported from @/lib/rules-engine
 
 const DEFAULT_RULES = [
   { nombre: "Socia sin compra día 3+", campo: "dias_sin_compra", operador: ">=", valor: "3", accion_tipo: "contactar", accion_mensaje: "Contactar a {nombre}: lleva {dias_sin_compra} días sin comprar.", prioridad: "alta", asignar_a_rol: "coordinador", semanas_activas: [1, 2, 3, 4], condicion_extra: false },
