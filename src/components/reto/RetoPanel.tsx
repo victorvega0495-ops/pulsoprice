@@ -458,6 +458,15 @@ export function RetoPanel({ reto, onRefresh }: Props) {
         if (reglasActivas && reglasActivas.length > 0) {
           const { data: sociasActualizadas } = await supabase
             .from("socias_reto").select("*").eq("reto_id", reto.id);
+          // Build lookup: usuarios.id → auth_id for correct assignment
+          const { data: todosUsuarios } = await supabase
+            .from("usuarios").select("id, auth_id, rol").eq("activo", true);
+          const idToAuth: Record<string, string> = {};
+          let gerenteAuthId = user?.id || "";
+          for (const u of (todosUsuarios || [])) {
+            idToAuth[u.id] = u.auth_id;
+            if (u.rol === "gerente") gerenteAuthId = u.auth_id;
+          }
           const semUpload = getSemana(fechaHoy);
           for (const regla of reglasActivas) {
             if (!regla.semanas_activas?.includes(semUpload)) continue;
@@ -467,10 +476,17 @@ export function RetoPanel({ reto, onRefresh }: Props) {
                 .from("acciones_operativas").select("id").eq("regla_id", regla.id).eq("socia_reto_id", soc.id)
                 .in("estado", ["pendiente", "en_progreso"]).limit(1);
               if (existing && existing.length > 0) continue;
-              let asignadaA = user.id;
-              if (regla.asignar_a_rol === "coordinador" && soc.coordinador_id) asignadaA = soc.coordinador_id;
-              else if (regla.asignar_a_rol === "desarrolladora" && soc.desarrolladora_id) asignadaA = soc.desarrolladora_id;
-              else if (regla.asignar_a_rol === "mentora" && soc.mentora_id) asignadaA = soc.mentora_id;
+              // Resolve auth_id from socia's assigned role
+              let asignadaA = gerenteAuthId; // fallback to gerente
+              if (regla.asignar_a_rol === "coordinador" && soc.coordinador_id && idToAuth[soc.coordinador_id]) {
+                asignadaA = idToAuth[soc.coordinador_id];
+              } else if (regla.asignar_a_rol === "desarrolladora" && soc.desarrolladora_id && idToAuth[soc.desarrolladora_id]) {
+                asignadaA = idToAuth[soc.desarrolladora_id];
+              } else if (regla.asignar_a_rol === "mentora" && soc.mentora_id && idToAuth[soc.mentora_id]) {
+                asignadaA = idToAuth[soc.mentora_id];
+              } else if (regla.asignar_a_rol === "gerente") {
+                asignadaA = gerenteAuthId;
+              }
               const mensaje = (regla.accion_mensaje || "")
                 .replace(/\{nombre\}/g, soc.nombre).replace(/\{dias_sin_compra\}/g, String(soc.dias_sin_compra))
                 .replace(/\{pct_avance\}/g, String(Number(soc.pct_avance).toFixed(1)))
