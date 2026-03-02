@@ -73,6 +73,7 @@ export default function ColaTrabajo() {
   const [filterOperador, setFilterOperador] = useState("todos");
   const [filterRetoId, setFilterRetoId] = useState<string>("auto");
   const [generando, setGenerando] = useState(false);
+  const [reasignando, setReasignando] = useState(false);
   const [fichaOpen, setFichaOpen] = useState<string | null>(null);
 
   const isManager = profile?.rol === "director" || profile?.rol === "gerente";
@@ -147,13 +148,26 @@ export default function ColaTrabajo() {
     },
   });
 
-  const equipo = usuarios.filter((u: any) => ["coordinador", "desarrolladora", "gerente", "operador"].includes(u.rol));
+  const equipo = usuarios.filter((u: any) => ["coordinador", "desarrolladora", "gerente"].includes(u.rol));
+
+  // Build lookup for both id and auth_id so filter works with old and new data
+  const authToId: Record<string, string> = {};
+  const idToAuth: Record<string, string> = {};
+  for (const u of usuarios) {
+    authToId[(u as any).auth_id] = (u as any).id;
+    idToAuth[(u as any).id] = (u as any).auth_id;
+  }
 
   const filtered = acciones.filter((a: any) => {
     if (filter === "urgentes") return a.prioridad === "urgente";
     if (filter === "metodo") return a.origen === "MÉTODO" || a.origen === "metodo";
     if (filter === "ia") return a.origen === "IA" || a.origen === "ia" || a.origen === "metodo_ia";
-    if (filterOperador !== "todos") return a.asignada_a === filterOperador;
+    if (filterOperador !== "todos") {
+      // Match by auth_id or usuarios.id (backward compat)
+      const selectedAuthId = filterOperador;
+      const selectedUsuarioId = authToId[filterOperador];
+      return a.asignada_a === selectedAuthId || a.asignada_a === selectedUsuarioId;
+    }
     return true;
   });
 
@@ -292,6 +306,66 @@ export default function ColaTrabajo() {
     }
   };
 
+  // Reassign all pending actions to correct owners
+  const handleReasignar = async () => {
+    setReasignando(true);
+    try {
+      const { data: pendientes } = await supabase
+        .from("acciones_operativas")
+        .select("id, regla_id, socia_reto_id, asignada_a")
+        .in("estado", ["pendiente", "pospuesta"]);
+      if (!pendientes || pendientes.length === 0) {
+        toast({ title: "Sin acciones pendientes" });
+        setReasignando(false);
+        return;
+      }
+      const reglaIds = [...new Set(pendientes.map(a => a.regla_id).filter(Boolean))];
+      const { data: reglas } = await supabase
+        .from("reglas_metodo").select("id, asignar_a_rol")
+        .in("id", reglaIds.length > 0 ? reglaIds : ["00000000-0000-0000-0000-000000000000"]);
+      const reglaMap: Record<string, string> = {};
+      for (const r of (reglas || [])) reglaMap[r.id] = r.asignar_a_rol;
+      const sociaIds = [...new Set(pendientes.map(a => a.socia_reto_id))];
+      const { data: sociasList } = await supabase
+        .from("socias_reto").select("id, coordinador_id, desarrolladora_id, mentora_id")
+        .in("id", sociaIds);
+      const sociaMap: Record<string, any> = {};
+      for (const s of (sociasList || [])) sociaMap[s.id] = s;
+      const { data: allUsers } = await supabase
+        .from("usuarios").select("id, auth_id, rol").eq("activo", true);
+      const uIdToAuth: Record<string, string> = {};
+      let gerenteAuth = "";
+      for (const u of (allUsers || [])) {
+        uIdToAuth[u.id] = u.auth_id;
+        if (u.rol === "gerente") gerenteAuth = u.auth_id;
+      }
+      let updated = 0;
+      for (const accion of pendientes) {
+        const rol = accion.regla_id ? reglaMap[accion.regla_id] : null;
+        const socia = sociaMap[accion.socia_reto_id];
+        if (!socia) continue;
+        let newAsignada = gerenteAuth;
+        if (rol === "coordinador" && socia.coordinador_id && uIdToAuth[socia.coordinador_id]) {
+          newAsignada = uIdToAuth[socia.coordinador_id];
+        } else if (rol === "desarrolladora" && socia.desarrolladora_id && uIdToAuth[socia.desarrolladora_id]) {
+          newAsignada = uIdToAuth[socia.desarrolladora_id];
+        } else if (rol === "mentora" && socia.mentora_id && uIdToAuth[socia.mentora_id]) {
+          newAsignada = uIdToAuth[socia.mentora_id];
+        }
+        if (newAsignada !== accion.asignada_a) {
+          await supabase.from("acciones_operativas").update({ asignada_a: newAsignada }).eq("id", accion.id);
+          updated++;
+        }
+      }
+      queryClient.invalidateQueries({ queryKey: ["cola-trabajo"] });
+      toast({ title: "Reasignación completada", description: `${updated} acciones reasignadas de ${pendientes.length} totales.` });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setReasignando(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
@@ -311,10 +385,16 @@ export default function ColaTrabajo() {
           </p>
         </div>
         {isManager && (
-          <Button variant="outline" size="sm" onClick={handleGenerarPruebas} disabled={generando}>
-            {generando ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Wand2 className="mr-1.5 h-3.5 w-3.5" />}
-            Generar acciones de prueba
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={handleReasignar} disabled={reasignando}>
+              {reasignando ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <ArrowUpRight className="mr-1.5 h-3.5 w-3.5" />}
+              Reasignar acciones pendientes
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleGenerarPruebas} disabled={generando}>
+              {generando ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Wand2 className="mr-1.5 h-3.5 w-3.5" />}
+              Generar pruebas
+            </Button>
+          </div>
         )}
       </div>
 
@@ -372,6 +452,7 @@ export default function ColaTrabajo() {
             const socia = accion.socias_reto;
             const isUrgente = accion.prioridad === "urgente";
             const origenKey = accion.origen?.toUpperCase?.() || accion.origen;
+            const asignadoNombre = usuarios.find((u: any) => u.auth_id === accion.asignada_a || u.id === accion.asignada_a)?.nombre || "Sin asignar";
             return (
               <div
                 key={accion.id}
@@ -401,6 +482,7 @@ export default function ColaTrabajo() {
                     <p className="text-xs text-muted-foreground/70 line-clamp-2">{accion.contexto}</p>
                   )}
                   <p className="text-[10px] text-muted-foreground/50">
+                    {isManager && <span className="text-muted-foreground/70 font-medium">→ {asignadoNombre} · </span>}
                     {accion.retos?.nombre && <span className="text-muted-foreground/70">{accion.retos.nombre} · </span>}
                     {formatDistanceToNow(new Date(accion.created_at), { addSuffix: true, locale: es })}
                   </p>
