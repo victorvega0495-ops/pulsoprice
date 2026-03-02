@@ -78,18 +78,22 @@ export default function ColaTrabajo() {
 
   const isManager = profile?.rol === "director" || profile?.rol === "gerente";
 
-  // Fetch retos for filter
+  // Fetch retos for filter (include closed/cancelled for display but flag them)
   const { data: retosDisponibles = [] } = useQuery({
     queryKey: ["retos-cola"],
     queryFn: async () => {
       const { data } = await supabase
         .from("retos")
-        .select("id, nombre, estado")
-        .in("estado", ["publicado", "activo", "en_cierre"])
+        .select("id, nombre, estado, tipo_reto")
         .order("created_at", { ascending: false });
       return data || [];
     },
   });
+
+  const retosActivos = retosDisponibles.filter((r: any) => ["publicado", "activo", "en_cierre"].includes(r.estado));
+  const retosCerrados = retosDisponibles.filter((r: any) => ["cerrado", "cancelado"].includes(r.estado));
+  const selectedRetoCerrado = filterRetoId !== "auto" && filterRetoId !== "todos" && filterRetoId !== "operacion" && filterRetoId !== "seguimiento"
+    && retosCerrados.some((r: any) => r.id === filterRetoId);
 
   // Determine the active reto id for default filter — show all by default
   const activeRetoId = filterRetoId === "auto"
@@ -101,13 +105,18 @@ export default function ColaTrabajo() {
 
   // Fetch acciones
   const { data: acciones = [], isLoading } = useQuery({
-    queryKey: ["cola-trabajo", profile?.id, activeRetoId],
+    queryKey: ["cola-trabajo", profile?.id, activeRetoId, selectedRetoCerrado],
     queryFn: async () => {
       let query = supabase
         .from("acciones_operativas")
-        .select("*, socias_reto!inner(nombre, telefono, tienda_visita, venta_acumulada, meta_individual, dias_sin_compra, estado, id_socia, baseline_mensual, pct_avance), retos!inner(nombre, tipo_reto)")
+        .select("*, socias_reto!inner(nombre, telefono, tienda_visita, venta_acumulada, meta_individual, dias_sin_compra, estado, id_socia, baseline_mensual, pct_avance), retos!inner(nombre, tipo_reto, estado)")
         .in("estado", ["pendiente", "pospuesta"])
         .order("created_at", { ascending: true });
+
+      // Only show actions from active retos unless user explicitly picks a closed one
+      if (!selectedRetoCerrado) {
+        query = query.in("retos.estado", ["publicado", "activo", "en_cierre"]);
+      }
 
       if (activeRetoId && activeRetoId !== "operacion" && activeRetoId !== "seguimiento") {
         query = query.eq("reto_id", activeRetoId);
@@ -408,9 +417,17 @@ export default function ColaTrabajo() {
             <SelectItem value="auto">Todos mis retos</SelectItem>
             <SelectItem value="operacion">Solo Operación</SelectItem>
             <SelectItem value="seguimiento">Solo Seguimiento</SelectItem>
-            {retosDisponibles.map((r: any) => (
-              <SelectItem key={r.id} value={r.id}>{r.nombre} ({(r as any).tipo_reto === "seguimiento" ? "Seguimiento" : "Operación"})</SelectItem>
+            {retosActivos.map((r: any) => (
+              <SelectItem key={r.id} value={r.id}>{r.nombre} ({r.tipo_reto === "seguimiento" ? "Seg." : "Op."})</SelectItem>
             ))}
+            {retosCerrados.length > 0 && (
+              <>
+                <SelectItem value="__sep" disabled>── Cerrados / Cancelados ──</SelectItem>
+                {retosCerrados.map((r: any) => (
+                  <SelectItem key={r.id} value={r.id}>{r.nombre} ({r.estado})</SelectItem>
+                ))}
+              </>
+            )}
           </SelectContent>
         </Select>
         <Tabs value={filter} onValueChange={(v) => { setFilter(v); setFilterOperador("todos"); }}>
@@ -437,7 +454,16 @@ export default function ColaTrabajo() {
       </div>
 
       {/* Empty state */}
-      {filtered.length === 0 ? (
+      {selectedRetoCerrado ? (
+        <div className="flex flex-col items-center justify-center py-24">
+          <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
+            <Check className="h-8 w-8 text-muted-foreground" />
+          </div>
+          <h2 className="text-xl font-bold mb-2">Reto cerrado</h2>
+          <p className="text-muted-foreground">Este reto está cerrado. No hay acciones pendientes.</p>
+          <p className="text-xs text-muted-foreground/70 mt-1">Las acciones fueron canceladas automáticamente al cerrar el reto.</p>
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24">
           <PartyPopper className="h-16 w-16 text-primary mb-4" />
           <h2 className="text-xl font-bold mb-2">¡Todo al día!</h2>

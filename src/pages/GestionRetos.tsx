@@ -117,8 +117,23 @@ export default function GestionRetos() {
     if (!transitionReto || !transitionTarget) return;
     const { error } = await supabase.from("retos").update({ estado: transitionTarget.target as any }).eq("id", transitionReto.id);
     if (error) { toast({ title: "Error", description: error.message, variant: "destructive" }); return; }
+
+    // Auto-cancel pending actions and close alerts when reto is cerrado or cancelado
+    if (["cerrado", "cancelado"].includes(transitionTarget.target)) {
+      const motivo = transitionTarget.target === "cerrado" ? "Reto cerrado automáticamente" : "Reto cancelado automáticamente";
+      await supabase.from("acciones_operativas").update({
+        estado: "cancelada",
+        comentario_resultado: motivo,
+      }).eq("reto_id", transitionReto.id).in("estado", ["pendiente", "en_progreso", "pospuesta"]);
+
+      await supabase.from("alertas").update({
+        estado: "cerrada",
+      }).eq("reto_id", transitionReto.id).in("estado", ["nueva", "vista", "atendida"]);
+    }
+
     toast({ title: `Reto → ${transitionTarget.label}` });
     queryClient.invalidateQueries({ queryKey: ["todos-retos"] });
+    queryClient.invalidateQueries({ queryKey: ["cola-trabajo"] });
     setTransitionReto(null);
     setTransitionTarget(null);
   };
