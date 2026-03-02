@@ -10,9 +10,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -21,7 +27,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import {
   Check, Clock, ArrowUpRight, MessageSquare, StickyNote,
-  PartyPopper, CalendarIcon, Wand2, Loader2,
+  PartyPopper, CalendarIcon, Wand2, Loader2, CalendarDays,
 } from "lucide-react";
 
 const prioridadColors: Record<string, string> = {
@@ -32,32 +38,39 @@ const prioridadColors: Record<string, string> = {
 };
 
 const origenBadge: Record<string, string> = {
-  MÉTODO: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+  agenda: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+  MÉTODO: "bg-orange-500/20 text-orange-400 border-orange-500/30",
+  metodo: "bg-orange-500/20 text-orange-400 border-orange-500/30",
   IA: "bg-purple-500/20 text-purple-400 border-purple-500/30",
+  ia: "bg-purple-500/20 text-purple-400 border-purple-500/30",
+  metodo_ia: "bg-purple-500/20 text-purple-400 border-purple-500/30",
   RALLY: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
   MANUAL: "bg-muted text-muted-foreground border-border",
   ESCALADA: "bg-orange-500/20 text-orange-400 border-orange-500/30",
-  metodo: "bg-blue-500/20 text-blue-400 border-blue-500/30",
-  ia: "bg-purple-500/20 text-purple-400 border-purple-500/30",
-  metodo_ia: "bg-purple-500/20 text-purple-400 border-purple-500/30",
   sistema: "bg-muted text-muted-foreground border-border",
   manual: "bg-muted text-muted-foreground border-border",
 };
 
-type ModalType = "completar" | "posponer" | "escalar" | "nota" | null;
+const origenLabel: Record<string, string> = {
+  agenda: "AGENDA",
+  MÉTODO: "TAREA",
+  metodo: "TAREA",
+  IA: "IA",
+  ia: "IA",
+  metodo_ia: "IA",
+  RALLY: "RALLY",
+  MANUAL: "MANUAL",
+  ESCALADA: "ESCALADA",
+  sistema: "SISTEMA",
+  manual: "MANUAL",
+};
 
-const TEST_ACTIONS = [
-  { tipo: "contactar", titulo: "Contactar socia inactiva 3 días", prioridad: "alta", origen: "MÉTODO", contexto: "Sin compra desde hace 3 días. Verificar si tiene producto disponible." },
-  { tipo: "contactar", titulo: "Contactar socia inactiva 5 días", prioridad: "urgente", origen: "MÉTODO", contexto: "5 días sin actividad. Intervención urgente antes de perderla." },
-  { tipo: "celebrar", titulo: "Felicitar por primera venta", prioridad: "media", origen: "MÉTODO", contexto: "Primera venta registrada ayer. Reforzar positivamente." },
-  { tipo: "celebrar", titulo: "Celebrar meta semanal alcanzada", prioridad: "baja", origen: "IA", contexto: "Superó su meta de la semana 1. Reconocer el logro." },
-  { tipo: "diagnosticar", titulo: "Revisar patrón de caída", prioridad: "alta", origen: "IA", contexto: "Vendía $1,200/día y bajó a $300. Posible problema con inventario." },
-  { tipo: "contactar", titulo: "Seguimiento post-llamada", prioridad: "media", origen: "MANUAL", contexto: "Se habló ayer, quedó de publicar en Marketplace. Verificar si lo hizo." },
-  { tipo: "contactar", titulo: "Activar CrediPrice", prioridad: "media", origen: "MÉTODO", contexto: "Socia con potencial pero sin capital. Sugerir CrediPrice para su primera compra grande." },
-  { tipo: "escalar", titulo: "Problema con pedido en tienda", prioridad: "urgente", origen: "MANUAL", contexto: "Socia reporta que su pedido no llegó a tienda. Escalar a call center." },
-  { tipo: "contactar", titulo: "Reactivar socia con potencial", prioridad: "alta", origen: "IA", contexto: "Perfil similar a G1 exitosas pero no ha comprado esta semana. Vale la pena intervenir." },
-  { tipo: "contactar", titulo: "Recordar taller presencial", prioridad: "baja", origen: "MÉTODO", contexto: "Taller de la semana 2 es mañana. Confirmar asistencia." },
-];
+const DIAS_SEMANA_LABELS: Record<string, string> = {
+  lunes: "Lunes", martes: "Martes", miercoles: "Miércoles",
+  jueves: "Jueves", viernes: "Viernes", sabado_domingo: "Sáb-Dom",
+};
+
+type ModalType = "completar" | "posponer" | "escalar" | "nota" | null;
 
 export default function ColaTrabajo() {
   const { profile, user } = useAuth();
@@ -72,20 +85,21 @@ export default function ColaTrabajo() {
   const [posponerOpcion, setPosponerOpcion] = useState("");
   const [filterOperador, setFilterOperador] = useState("todos");
   const [filterRetoId, setFilterRetoId] = useState<string>("auto");
-  const [generando, setGenerando] = useState(false);
   const [reasignando, setReasignando] = useState(false);
   const [fichaOpen, setFichaOpen] = useState<string | null>(null);
+  const [aprobando, setAprobando] = useState(false);
+  const [showApproveConfirm, setShowApproveConfirm] = useState(false);
 
   const isManager = profile?.rol === "director" || profile?.rol === "gerente";
   const isMentora = profile?.rol === "mentora";
 
-  // Fetch retos for filter (include closed/cancelled for display but flag them)
+  // Fetch retos
   const { data: retosDisponibles = [] } = useQuery({
     queryKey: ["retos-cola"],
     queryFn: async () => {
       const { data } = await supabase
         .from("retos")
-        .select("id, nombre, estado, tipo_reto")
+        .select("id, nombre, estado, tipo_reto, fecha_inicio")
         .order("created_at", { ascending: false });
       return data || [];
     },
@@ -96,13 +110,63 @@ export default function ColaTrabajo() {
   const selectedRetoCerrado = filterRetoId !== "auto" && filterRetoId !== "todos" && filterRetoId !== "operacion" && filterRetoId !== "seguimiento"
     && retosCerrados.some((r: any) => r.id === filterRetoId);
 
-  // Determine the active reto id for default filter — show all by default
   const activeRetoId = filterRetoId === "auto"
-    ? null // Show all active retos by default
+    ? null
     : filterRetoId === "todos" ? null
     : filterRetoId === "operacion" ? "operacion"
     : filterRetoId === "seguimiento" ? "seguimiento"
     : filterRetoId;
+
+  // Compute current day for active retos
+  const computeDiaActual = (reto: any) => {
+    if (!reto?.fecha_inicio) return 0;
+    const inicio = new Date(reto.fecha_inicio + "T00:00:00");
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    return Math.floor((hoy.getTime() - inicio.getTime()) / 86400000) + 1;
+  };
+
+  // Get agenda for today across active retos
+  const { data: agendaHoy = [] } = useQuery({
+    queryKey: ["agenda-hoy", retosActivos.map((r: any) => r.id).join(",")],
+    queryFn: async () => {
+      if (retosActivos.length === 0) return [];
+      const results: any[] = [];
+      for (const reto of retosActivos) {
+        const dia = computeDiaActual(reto);
+        if (dia < 1 || dia > 29) continue;
+        const { data } = await supabase
+          .from("agenda_metodo")
+          .select("*")
+          .eq("reto_id", reto.id)
+          .eq("dia_numero", dia)
+          .maybeSingle();
+        if (data) results.push({ ...data, reto_nombre: reto.nombre, reto_fecha_inicio: reto.fecha_inicio });
+      }
+      return results;
+    },
+    enabled: retosActivos.length > 0,
+  });
+
+  // Check if agenda was already approved today
+  const { data: agendaAprobadaHoy = [] } = useQuery({
+    queryKey: ["agenda-aprobada-hoy", retosActivos.map((r: any) => r.id).join(",")],
+    queryFn: async () => {
+      if (retosActivos.length === 0) return [];
+      const hoy = new Date();
+      const hoyStr = hoy.toISOString().split("T")[0];
+      const { data } = await supabase
+        .from("acciones_operativas")
+        .select("reto_id")
+        .eq("origen", "agenda")
+        .gte("created_at", hoyStr + "T00:00:00")
+        .lte("created_at", hoyStr + "T23:59:59");
+      return data || [];
+    },
+    enabled: retosActivos.length > 0,
+  });
+
+  const agendaRetoIdsAprobados = new Set((agendaAprobadaHoy || []).map((a: any) => a.reto_id));
+  const agendaPendiente = agendaHoy.filter((a: any) => !agendaRetoIdsAprobados.has(a.reto_id));
 
   // Fetch acciones
   const { data: acciones = [], isLoading } = useQuery({
@@ -110,11 +174,10 @@ export default function ColaTrabajo() {
     queryFn: async () => {
       let query = supabase
         .from("acciones_operativas")
-        .select("*, socias_reto!inner(nombre, telefono, tienda_visita, venta_acumulada, meta_individual, dias_sin_compra, estado, id_socia, baseline_mensual, pct_avance), retos!inner(nombre, tipo_reto, estado)")
+        .select("*, socias_reto(nombre, telefono, tienda_visita, venta_acumulada, meta_individual, dias_sin_compra, estado, id_socia, baseline_mensual, pct_avance), retos!inner(nombre, tipo_reto, estado)")
         .in("estado", ["pendiente", "pospuesta"])
         .order("created_at", { ascending: true });
 
-      // Only show actions from active retos unless user explicitly picks a closed one
       if (!selectedRetoCerrado) {
         query = query.in("retos.estado", ["publicado", "activo", "en_cierre"]);
       }
@@ -136,7 +199,6 @@ export default function ColaTrabajo() {
           if (a.estado === "pospuesta" && a.pospuesta_hasta) {
             if (new Date(a.pospuesta_hasta) > now) return false;
           }
-          // Filter by tipo_reto if selected
           if (activeRetoId === "operacion" && a.retos?.tipo_reto !== "operacion") return false;
           if (activeRetoId === "seguimiento" && a.retos?.tipo_reto !== "seguimiento") return false;
           return true;
@@ -149,7 +211,7 @@ export default function ColaTrabajo() {
     refetchOnWindowFocus: true,
   });
 
-  // Fetch usuarios for escalar & filter
+  // Fetch usuarios
   const { data: usuarios = [] } = useQuery({
     queryKey: ["usuarios-activos"],
     queryFn: async () => {
@@ -160,7 +222,6 @@ export default function ColaTrabajo() {
 
   const equipo = usuarios.filter((u: any) => ["coordinador", "desarrolladora", "gerente", "mentora"].includes(u.rol));
 
-  // Build lookup for both id and auth_id so filter works with old and new data
   const authToId: Record<string, string> = {};
   const idToAuth: Record<string, string> = {};
   for (const u of usuarios) {
@@ -168,12 +229,16 @@ export default function ColaTrabajo() {
     idToAuth[(u as any).id] = (u as any).auth_id;
   }
 
+  // Split acciones into agenda and tareas
+  const accionesAgenda = acciones.filter((a: any) => a.origen === "agenda");
+  const accionesTareas = acciones.filter((a: any) => a.origen !== "agenda");
+
   const filtered = acciones.filter((a: any) => {
+    if (filter === "agenda") return a.origen === "agenda";
+    if (filter === "tareas") return a.origen !== "agenda";
     if (filter === "urgentes") return a.prioridad === "urgente";
-    if (filter === "metodo") return a.origen === "MÉTODO" || a.origen === "metodo";
     if (filter === "ia") return a.origen === "IA" || a.origen === "ia" || a.origen === "metodo_ia";
     if (filterOperador !== "todos") {
-      // Match by auth_id or usuarios.id (backward compat)
       const selectedAuthId = filterOperador;
       const selectedUsuarioId = authToId[filterOperador];
       return a.asignada_a === selectedAuthId || a.asignada_a === selectedUsuarioId;
@@ -201,11 +266,13 @@ export default function ColaTrabajo() {
     await supabase.from("acciones_operativas").update({
       estado: "completada", resultado, comentario_resultado: comentario, fecha_completada: new Date().toISOString(),
     }).eq("id", selectedAccion.id);
-    await supabase.from("interacciones").insert({
-      reto_id: selectedAccion.reto_id, socia_reto_id: selectedAccion.socia_reto_id,
-      accion_id: selectedAccion.id, usuario_id: user.id,
-      tipo: resultado.includes("no_contesto") ? "intento_contacto" : "contacto", comentario,
-    });
+    if (selectedAccion.socia_reto_id) {
+      await supabase.from("interacciones").insert({
+        reto_id: selectedAccion.reto_id, socia_reto_id: selectedAccion.socia_reto_id,
+        accion_id: selectedAccion.id, usuario_id: user.id,
+        tipo: resultado.includes("no_contesto") ? "intento_contacto" : "contacto", comentario,
+      });
+    }
     queryClient.invalidateQueries({ queryKey: ["cola-trabajo"] });
     toast({ title: "Acción completada", description: "Siguiente pendiente." });
     closeModal();
@@ -259,64 +326,122 @@ export default function ColaTrabajo() {
     closeModal();
   };
 
-  // Generate test data
-  const handleGenerarPruebas = async () => {
-    if (!user) return;
-    setGenerando(true);
+  // Approve agenda — generate actions for each team member
+  const handleAprobarAgenda = async () => {
+    setAprobando(true);
     try {
-      // Get active reto
-      const { data: retoActivo } = await supabase
-        .from("retos")
-        .select("id")
-        .in("estado", ["activo", "publicado"])
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
+      // Fetch mentoras for this reto
+      const { data: mentorasData } = await supabase
+        .from("mentoras").select("id, nombre, usuario_id").eq("activa", true);
 
-      if (!retoActivo) {
-        toast({ title: "Sin reto activo", description: "Primero publica un reto para generar acciones de prueba.", variant: "destructive" });
-        setGenerando(false);
-        return;
+      for (const agendaDia of agendaPendiente) {
+        const retoId = agendaDia.reto_id;
+        const diaNum = agendaDia.dia_numero;
+        const semana = agendaDia.semana;
+        const tituloBase = `Día ${diaNum} / S${semana} — ${DIAS_SEMANA_LABELS[agendaDia.dia_semana] || agendaDia.dia_semana}: ${agendaDia.titulo}`;
+
+        // Get first socia for this reto as placeholder (agenda actions aren't per-socia but we need socia_reto_id)
+        const { data: firstSocia } = await supabase
+          .from("socias_reto").select("id").eq("reto_id", retoId).limit(1).maybeSingle();
+        if (!firstSocia) continue;
+
+        const inserts: any[] = [];
+
+        // Helper to create sub_tareas from role text
+        const makeSubTareas = (text: string) => {
+          if (!text) return [];
+          return text.split(/[.\n]/).map(s => s.trim()).filter(s => s.length > 3).map(s => ({ texto: s, completada: false }));
+        };
+
+        // Coordinadores
+        const coords = usuarios.filter((u: any) => u.rol === "coordinador");
+        for (const coord of coords) {
+          inserts.push({
+            reto_id: retoId,
+            socia_reto_id: firstSocia.id,
+            asignada_a: coord.auth_id,
+            tipo: "agenda",
+            origen: "agenda",
+            titulo: tituloBase,
+            contexto: agendaDia.rol_coordinador || "",
+            prioridad: "media",
+            estado: "pendiente",
+            sub_tareas: makeSubTareas(agendaDia.rol_coordinador || ""),
+          });
+        }
+
+        // Desarrolladoras
+        const devs = usuarios.filter((u: any) => u.rol === "desarrolladora");
+        for (const dev of devs) {
+          inserts.push({
+            reto_id: retoId,
+            socia_reto_id: firstSocia.id,
+            asignada_a: dev.auth_id,
+            tipo: "agenda",
+            origen: "agenda",
+            titulo: tituloBase,
+            contexto: agendaDia.rol_desarrolladora || "",
+            prioridad: "media",
+            estado: "pendiente",
+            sub_tareas: makeSubTareas(agendaDia.rol_desarrolladora || ""),
+          });
+        }
+
+        // Mentoras
+        for (const mentora of (mentorasData || [])) {
+          const mentoraUsuario = usuarios.find((u: any) => u.id === mentora.usuario_id);
+          if (!mentoraUsuario) continue;
+          inserts.push({
+            reto_id: retoId,
+            socia_reto_id: firstSocia.id,
+            asignada_a: mentoraUsuario.auth_id,
+            tipo: "agenda",
+            origen: "agenda",
+            titulo: tituloBase,
+            contexto: agendaDia.rol_mentora || "",
+            prioridad: "media",
+            estado: "pendiente",
+            sub_tareas: makeSubTareas(agendaDia.rol_mentora || ""),
+          });
+        }
+
+        if (inserts.length > 0) {
+          const { error } = await supabase.from("acciones_operativas").insert(inserts);
+          if (error) throw error;
+        }
       }
-
-      // Get socias from reto
-      const { data: sociasList } = await supabase
-        .from("socias_reto")
-        .select("id")
-        .eq("reto_id", retoActivo.id)
-        .limit(20);
-
-      if (!sociasList || sociasList.length === 0) {
-        toast({ title: "Sin socias", description: "El reto activo no tiene socias.", variant: "destructive" });
-        setGenerando(false);
-        return;
-      }
-
-      const inserts = TEST_ACTIONS.map((a, i) => ({
-        reto_id: retoActivo.id,
-        socia_reto_id: sociasList[i % sociasList.length].id,
-        asignada_a: user.id,
-        tipo: a.tipo,
-        titulo: a.titulo,
-        prioridad: a.prioridad,
-        origen: a.origen,
-        contexto: a.contexto,
-        estado: "pendiente",
-      }));
-
-      const { error } = await supabase.from("acciones_operativas").insert(inserts);
-      if (error) throw error;
 
       queryClient.invalidateQueries({ queryKey: ["cola-trabajo"] });
-      toast({ title: "Datos de prueba creados", description: "10 acciones generadas correctamente." });
+      queryClient.invalidateQueries({ queryKey: ["agenda-aprobada-hoy"] });
+      toast({ title: "Agenda aprobada", description: `Acciones enviadas a todo el equipo.` });
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
-      setGenerando(false);
+      setAprobando(false);
+      setShowApproveConfirm(false);
     }
   };
 
-  // Reassign all pending actions to correct owners
+  // Toggle sub-tarea checkbox
+  const handleToggleSubTarea = async (accion: any, index: number) => {
+    const subTareas = Array.isArray(accion.sub_tareas) ? [...accion.sub_tareas] : [];
+    if (!subTareas[index]) return;
+    subTareas[index] = { ...subTareas[index], completada: !subTareas[index].completada };
+    const allDone = subTareas.every((s: any) => s.completada);
+    const updates: any = { sub_tareas: subTareas };
+    if (allDone) {
+      updates.estado = "completada";
+      updates.fecha_completada = new Date().toISOString();
+      updates.resultado = "completada";
+    }
+    await supabase.from("acciones_operativas").update(updates).eq("id", accion.id);
+    queryClient.invalidateQueries({ queryKey: ["cola-trabajo"] });
+    if (allDone) {
+      toast({ title: "✅ Agenda completada", description: "Todas las sub-tareas marcadas." });
+    }
+  };
+
+  // Reassign handler (kept from original)
   const handleReasignar = async () => {
     setReasignando(true);
     try {
@@ -349,7 +474,6 @@ export default function ColaTrabajo() {
         uIdToAuth[u.id] = u.auth_id;
         if (u.rol === "gerente") gerenteAuth = u.auth_id;
       }
-      // Mentora lookup
       const { data: mentorasLookup } = await supabase
         .from("mentoras").select("id, usuario_id").eq("activa", true);
       const mentoraIdToUsuarioId: Record<string, string> = {};
@@ -396,6 +520,11 @@ export default function ColaTrabajo() {
     );
   }
 
+  // Count team members by role for preview
+  const coordCount = usuarios.filter((u: any) => u.rol === "coordinador").length;
+  const devCount = usuarios.filter((u: any) => u.rol === "desarrolladora").length;
+  const mentoraCount = usuarios.filter((u: any) => u.rol === "mentora").length;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -410,15 +539,88 @@ export default function ColaTrabajo() {
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={handleReasignar} disabled={reasignando}>
               {reasignando ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <ArrowUpRight className="mr-1.5 h-3.5 w-3.5" />}
-              Reasignar acciones pendientes
-            </Button>
-            <Button variant="outline" size="sm" onClick={handleGenerarPruebas} disabled={generando}>
-              {generando ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Wand2 className="mr-1.5 h-3.5 w-3.5" />}
-              Generar pruebas
+              Reasignar
             </Button>
           </div>
         )}
       </div>
+
+      {/* GERENTE: Agenda del Día pendiente de aprobar */}
+      {isManager && agendaPendiente.length > 0 && (
+        <div className="space-y-4">
+          {agendaPendiente.map((agendaDia: any) => {
+            const diaNum = agendaDia.dia_numero;
+            const semana = agendaDia.semana;
+            return (
+              <div key={agendaDia.id} className="rounded-lg border-2 border-primary/30 bg-primary/5 p-5 space-y-4">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h3 className="text-lg font-bold flex items-center gap-2">
+                      📅 Día {diaNum} / Semana {semana} — {DIAS_SEMANA_LABELS[agendaDia.dia_semana] || agendaDia.dia_semana}: {agendaDia.titulo}
+                    </h3>
+                    <p className="text-xs text-muted-foreground">{agendaDia.reto_nombre}</p>
+                    {agendaDia.descripcion && <p className="text-sm text-muted-foreground mt-1">{agendaDia.descripcion}</p>}
+                  </div>
+                  <Badge className="bg-primary/20 text-primary border-primary/30">Pendiente</Badge>
+                </div>
+
+                {/* Actividades */}
+                {agendaDia.actividades && Array.isArray(agendaDia.actividades) && (
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground mb-1">Actividades del día</p>
+                    <ul className="list-disc list-inside text-sm space-y-0.5">
+                      {(agendaDia.actividades as string[]).map((a: string, i: number) => <li key={i}>{a}</li>)}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Tarea socia */}
+                {agendaDia.tarea_socia && (
+                  <div className="rounded-md border border-primary/30 bg-primary/5 p-3">
+                    <p className="text-xs font-semibold text-primary mb-1">🎯 Tarea del día para las socias</p>
+                    <p className="text-sm">{agendaDia.tarea_socia}</p>
+                  </div>
+                )}
+
+                {/* Preview por rol */}
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {agendaDia.rol_coordinador && (
+                    <div className="rounded-md border p-3">
+                      <p className="text-xs font-semibold text-muted-foreground mb-1">Coordinadores ({coordCount})</p>
+                      <p className="text-sm">{agendaDia.rol_coordinador}</p>
+                    </div>
+                  )}
+                  {agendaDia.rol_desarrolladora && (
+                    <div className="rounded-md border p-3">
+                      <p className="text-xs font-semibold text-muted-foreground mb-1">Desarrolladoras ({devCount})</p>
+                      <p className="text-sm">{agendaDia.rol_desarrolladora}</p>
+                    </div>
+                  )}
+                  {agendaDia.rol_mentora && (
+                    <div className="rounded-md border p-3">
+                      <p className="text-xs font-semibold text-muted-foreground mb-1">Mentoras ({mentoraCount})</p>
+                      <p className="text-sm">{agendaDia.rol_mentora}</p>
+                    </div>
+                  )}
+                </div>
+
+                <Button size="lg" className="w-full" onClick={() => setShowApproveConfirm(true)} disabled={aprobando}>
+                  {aprobando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+                  ✅ Aprobar y enviar agenda del día
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Banner naranja for non-manager if agenda not approved */}
+      {!isManager && agendaHoy.length > 0 && agendaPendiente.length > 0 && accionesAgenda.length === 0 && (
+        <div className="rounded-lg border border-orange-500/30 bg-orange-500/10 p-4 flex items-center gap-3">
+          <span className="text-lg">⚠️</span>
+          <p className="text-sm text-orange-300">La agenda del día está pendiente de aprobación por la gerente.</p>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
@@ -446,8 +648,9 @@ export default function ColaTrabajo() {
         <Tabs value={filter} onValueChange={(v) => { setFilter(v); setFilterOperador("todos"); }}>
           <TabsList>
             <TabsTrigger value="todas">Todas</TabsTrigger>
+            <TabsTrigger value="agenda">Agenda</TabsTrigger>
+            <TabsTrigger value="tareas">Tareas</TabsTrigger>
             <TabsTrigger value="urgentes">Urgentes</TabsTrigger>
-            <TabsTrigger value="metodo">Método</TabsTrigger>
             <TabsTrigger value="ia">IA</TabsTrigger>
           </TabsList>
         </Tabs>
@@ -474,7 +677,6 @@ export default function ColaTrabajo() {
           </div>
           <h2 className="text-xl font-bold mb-2">Reto cerrado</h2>
           <p className="text-muted-foreground">Este reto está cerrado. No hay acciones pendientes.</p>
-          <p className="text-xs text-muted-foreground/70 mt-1">Las acciones fueron canceladas automáticamente al cerrar el reto.</p>
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24">
@@ -482,16 +684,24 @@ export default function ColaTrabajo() {
           <h2 className="text-xl font-bold mb-2">¡Todo al día!</h2>
           <p className="text-muted-foreground mb-2">No tienes acciones pendientes.</p>
           <p className="text-xs text-muted-foreground/70 max-w-sm text-center">
-            Las acciones se generan automáticamente al cargar ventas si el reto tiene reglas activas. Ve a Reglas del Método para configurarlas.
+            Las acciones se generan automáticamente al cargar ventas si el reto tiene reglas activas, o cuando la gerente aprueba la agenda del día.
           </p>
         </div>
       ) : (
         <div className="space-y-3">
           {filtered.map((accion: any) => {
+            const isAgenda = accion.origen === "agenda";
+
+            if (isAgenda) {
+              return <AgendaCard key={accion.id} accion={accion} onToggle={handleToggleSubTarea} />;
+            }
+
+            // Regular task card
             const socia = accion.socias_reto;
             const isUrgente = accion.prioridad === "urgente";
             const isAlta = accion.prioridad === "alta";
-            const origenKey = accion.origen?.toUpperCase?.() || accion.origen;
+            const label = origenLabel[accion.origen] || accion.origen;
+            const badgeClass = origenBadge[accion.origen] || origenBadge.MANUAL;
             const asignadoNombre = usuarios.find((u: any) => u.auth_id === accion.asignada_a || u.id === accion.asignada_a)?.nombre || "Sin asignar";
             const diasSinCompra = Number(socia?.dias_sin_compra || 0);
             const accionIcon = accion.tipo === "celebrar" ? "🎉" : accion.tipo === "diagnosticar" ? "🔍" : "📞";
@@ -507,20 +717,17 @@ export default function ColaTrabajo() {
                 )}
               >
                 <div className="flex gap-4">
-                  {/* Main content */}
                   <div className="flex-1 min-w-0 space-y-2">
-                    {/* LINE 1: Badges */}
                     <div className="flex items-center gap-2 flex-wrap">
                       <Badge variant="outline" className={cn("text-[10px] uppercase", accion.retos?.tipo_reto === "seguimiento" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : "bg-blue-500/20 text-blue-400 border-blue-500/30")}>
                         {accion.retos?.nombre || "Reto"}
                       </Badge>
-                      <Badge variant="outline" className={cn("text-[10px] uppercase", origenBadge[accion.origen] || origenBadge[origenKey] || origenBadge.MANUAL)}>
-                        {accion.origen}
+                      <Badge variant="outline" className={cn("text-[10px] uppercase", badgeClass)}>
+                        {label}
                       </Badge>
                       {isUrgente && <Badge variant="destructive" className="text-[10px]">URGENTE</Badge>}
                     </div>
 
-                    {/* LINE 2: Socia name — prominent */}
                     <button
                       className="text-left text-lg font-bold text-foreground hover:underline"
                       onClick={() => setFichaOpen(accion.socia_reto_id)}
@@ -528,7 +735,6 @@ export default function ColaTrabajo() {
                       {socia?.nombre || "Socia"}
                     </button>
 
-                    {/* LINE 3: Context info */}
                     <p className="text-sm text-muted-foreground">
                       {socia?.tienda_visita || "Sin tienda"}
                       {socia?.baseline_mensual != null && <> · Baseline ${Number(socia.baseline_mensual).toLocaleString()}</>}
@@ -538,7 +744,6 @@ export default function ColaTrabajo() {
                       )}
                     </p>
 
-                    {/* LINE 4: The action — highlighted */}
                     <div className="rounded-md bg-accent/30 border border-border/50 px-3 py-2">
                       <p className="text-sm font-medium">
                         <span className="mr-1.5">{accionIcon}</span>
@@ -552,17 +757,15 @@ export default function ColaTrabajo() {
                       )}
                     </div>
 
-                    {/* LINE 5: Assignment + time */}
                     <p className="text-[11px] text-muted-foreground/60">
                       → {asignadoNombre} · {formatDistanceToNow(new Date(accion.created_at), { addSuffix: true, locale: es })}
                     </p>
                   </div>
 
-                  {/* Action buttons — vertical */}
                   <div className="flex flex-col items-center gap-1 shrink-0 pt-6">
                     {socia?.telefono ? (
                       <Button size="icon" variant="outline" className="h-9 w-9 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300" asChild title="WhatsApp">
-                        <a href={`https://wa.me/52${socia.telefono.replace(/\D/g, "")}?text=${encodeURIComponent(`Hola ${accion.socia_nombre || "socia"}, soy tu asesora del Reto Price Shoes`)}`} target="_blank" rel="noopener noreferrer">
+                        <a href={`https://wa.me/52${socia.telefono.replace(/\D/g, "")}?text=${encodeURIComponent(`Hola ${socia?.nombre || "socia"}, soy tu asesora del Reto Price Shoes`)}`} target="_blank" rel="noopener noreferrer">
                           <MessageSquare className="h-4 w-4" />
                         </a>
                       </Button>
@@ -590,6 +793,25 @@ export default function ColaTrabajo() {
           })}
         </div>
       )}
+
+      {/* Approve Confirmation */}
+      <AlertDialog open={showApproveConfirm} onOpenChange={setShowApproveConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Aprobar y enviar agenda del día?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se generarán acciones individuales para cada coordinador, desarrolladora y mentora activa. Cada uno recibirá su checklist con las sub-tareas de hoy.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleAprobarAgenda} disabled={aprobando}>
+              {aprobando && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Aprobar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* MODAL: Completar */}
       <Dialog open={modal === "completar"} onOpenChange={(o) => !o && closeModal()}>
@@ -702,6 +924,60 @@ export default function ColaTrabajo() {
         open={!!fichaOpen}
         onClose={() => setFichaOpen(null)}
       />
+    </div>
+  );
+}
+
+// ===== Agenda Card Component =====
+function AgendaCard({ accion, onToggle }: { accion: any; onToggle: (accion: any, index: number) => void }) {
+  const subTareas: Array<{ texto: string; completada: boolean }> = Array.isArray(accion.sub_tareas) ? accion.sub_tareas : [];
+  const completadas = subTareas.filter(s => s.completada).length;
+  const total = subTareas.length;
+  const pct = total > 0 ? Math.round((completadas / total) * 100) : 0;
+
+  // Extract day info from titulo
+  const titulo = accion.titulo || "";
+
+  return (
+    <div className="rounded-lg border-2 border-blue-500/30 bg-blue-500/5 p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-[10px] uppercase">AGENDA</Badge>
+        <Badge variant="outline" className="text-[10px]">{accion.retos?.nombre}</Badge>
+      </div>
+
+      <h4 className="text-sm font-bold">📅 {titulo}</h4>
+
+      {/* Checklist */}
+      {subTareas.length > 0 && (
+        <div className="space-y-2">
+          {subTareas.map((st, i) => (
+            <div key={i} className="flex items-start gap-2">
+              <Checkbox
+                checked={st.completada}
+                onCheckedChange={() => onToggle(accion, i)}
+                className="mt-0.5"
+              />
+              <span className={cn("text-sm", st.completada && "line-through text-muted-foreground")}>{st.texto}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* If no sub_tareas but has contexto */}
+      {subTareas.length === 0 && accion.contexto && (
+        <p className="text-sm text-muted-foreground">{accion.contexto}</p>
+      )}
+
+      {/* Progress */}
+      {total > 0 && (
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>{completadas} de {total} completadas</span>
+            <span>{pct}%</span>
+          </div>
+          <Progress value={pct} className="h-2" />
+        </div>
+      )}
     </div>
   );
 }
