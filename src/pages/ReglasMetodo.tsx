@@ -80,14 +80,16 @@ const emptyForm = {
 };
 
 const PREDEFINED_RULES = [
-  { nombre: "Primera compra → celebrar", campo: "primera_compra", operador: "=", valor: "true", condicion_extra: false, accion_tipo: "celebrar", accion_mensaje: "¡{nombre} hizo su primera compra! Celebrar y reforzar el hábito.", asignar_a_rol: "mentora", prioridad: "alta", semanas_activas: [1,2,3,4] },
-  { nombre: "Inactividad 3 días → contactar", campo: "dias_sin_compra", operador: ">=", valor: "3", condicion_extra: false, accion_tipo: "contactar", accion_mensaje: "Socia lleva {dias_sin_compra} días sin compra. Contactar para identificar obstáculo.", asignar_a_rol: "coordinador", prioridad: "alta", semanas_activas: [1,2,3,4] },
-  { nombre: "Inactividad 5 días → escalar", campo: "dias_sin_compra", operador: ">=", valor: "5", condicion_extra: false, accion_tipo: "escalar", accion_mensaje: "Socia lleva {dias_sin_compra} días sin compra. Requiere intervención directa.", asignar_a_rol: "gerente", prioridad: "urgente", semanas_activas: [1,2,3,4] },
-  { nombre: "Avance > 80% → reforzar", campo: "pct_avance", operador: ">=", valor: "80", condicion_extra: false, accion_tipo: "celebrar", accion_mensaje: "Socia va al {pct_avance}% de su meta. Celebrar y motivar para superar.", asignar_a_rol: "mentora", prioridad: "media", semanas_activas: [2,3,4] },
-  { nombre: "Avance < 25% en S2 → diagnosticar", campo: "pct_avance", operador: "<", valor: "25", condicion_extra: false, accion_tipo: "diagnosticar", accion_mensaje: "Socia va al {pct_avance}% en semana 2+. Diagnosticar causa y ajustar plan.", asignar_a_rol: "coordinador", prioridad: "alta", semanas_activas: [2,3] },
-  { nombre: "G3 probable → intervención", campo: "g_probable", operador: "=", valor: "G3", condicion_extra: false, accion_tipo: "contactar", accion_mensaje: "Socia clasificada como G3 probable. Intervención necesaria antes de que sea definitivo.", asignar_a_rol: "coordinador", prioridad: "urgente", semanas_activas: [3,4] },
-  { nombre: "Sin CrediPrice + inactiva → ofrecer", campo: "crediprice_activo", operador: "=", valor: "false", condicion_extra: true, campo2: "dias_sin_compra", operador2: ">=", valor2: "2", logica_extra: "AND", accion_tipo: "contactar", accion_mensaje: "Socia sin CrediPrice y con {dias_sin_compra} días sin compra. Ofrecer capital de trabajo.", asignar_a_rol: "coordinador", prioridad: "media", semanas_activas: [1,2] },
-  { nombre: "Venta semanal alta → reconocer", campo: "venta_semanal", operador: ">=", valor: "10000", condicion_extra: false, accion_tipo: "celebrar", accion_mensaje: "Socia vendió ${venta_semanal} esta semana. Reconocer públicamente en grupo.", asignar_a_rol: "mentora", prioridad: "media", semanas_activas: [1,2,3,4] },
+  { nombre: "Sin actividad día 1", campo: "venta_acumulada", operador: "=", valor: "0", condicion_extra: false, accion_tipo: "contactar", accion_mensaje: "Contactar a {nombre}: no ha registrado ninguna compra. Verificar que entienda el reto y tenga mentora activa.", asignar_a_rol: "desarrolladora", prioridad: "alta", semanas_activas: [1] },
+  { nombre: "Primera compra", campo: "primera_compra", operador: "=", valor: "true", condicion_extra: false, accion_tipo: "celebrar", accion_mensaje: "¡Felicitar a {nombre} por su primera compra! Venta: ${venta_acumulada}. Reforzar el hábito y sugerir siguiente paso.", asignar_a_rol: "mentora", prioridad: "media", semanas_activas: [1,2,3,4] },
+  { nombre: "Sin compra 3+ días", campo: "dias_sin_compra", operador: ">=", valor: "3", condicion_extra: false, accion_tipo: "contactar", accion_mensaje: "Contactar a {nombre}: lleva {dias_sin_compra} días sin comprar. Identificar obstáculo y ofrecer táctica de prospección.", asignar_a_rol: "coordinador", prioridad: "alta", semanas_activas: [1,2,3,4] },
+  { nombre: "CrediPrice no activado", campo: "crediprice_activo", operador: "=", valor: "false", condicion_extra: true, campo2: "dias_sin_compra", operador2: ">=", valor2: "4", logica_extra: "AND", accion_tipo: "contactar", accion_mensaje: "Revisar CrediPrice con {nombre}. Lleva {dias_sin_compra} días sin compra y no tiene crédito activo. Explicar beneficio de capital de trabajo.", asignar_a_rol: "coordinador", prioridad: "media", semanas_activas: [1,2,3,4] },
+  { nombre: "Inactiva 7+ días", campo: "dias_sin_compra", operador: ">=", valor: "7", condicion_extra: false, accion_tipo: "contactar", accion_mensaje: "URGENTE: {nombre} lleva {dias_sin_compra} días sin compra. Intervención requerida: coordinador + mentora. Evaluar si necesita cambio de estrategia.", asignar_a_rol: "coordinador", prioridad: "urgente", semanas_activas: [1,2,3,4] },
+  { nombre: "Socia estrella", campo: "pct_avance", operador: ">=", valor: "80", condicion_extra: false, accion_tipo: "celebrar", accion_mensaje: "¡{nombre} va al {pct_avance}% de su meta! Celebrar logro y empujar para que cierre. Sugerir categoría nueva para diversificar.", asignar_a_rol: "mentora", prioridad: "media", semanas_activas: [2,3,4] },
+  { nombre: "Socia consistente — upsell", campo: "pct_avance", operador: ">=", valor: "50", condicion_extra: false, accion_tipo: "contactar", accion_mensaje: "{nombre} va al {pct_avance}%. Tiene momentum. Sugerir categoría nueva o CrediPrice para acelerar.", asignar_a_rol: "mentora", prioridad: "media", semanas_activas: [2,3] },
+  { nombre: "Sprint urgencia S4", campo: "pct_avance", operador: ">=", valor: "60", condicion_extra: true, campo2: "pct_avance", operador2: "<", valor2: "90", logica_extra: "AND", accion_tipo: "contactar", accion_mensaje: "Sprint final para {nombre}: va al {pct_avance}%. Necesita empujón coordinado entre coordinador + mentora para cerrar meta.", asignar_a_rol: "coordinador", prioridad: "alta", semanas_activas: [4] },
+  { nombre: "Probable G3", campo: "pct_avance", operador: "<", valor: "30", condicion_extra: false, accion_tipo: "diagnosticar", accion_mensaje: "{nombre} va al {pct_avance}%. Probable G3. Evaluar: ¿prospecta? ¿publica? ¿asistió a talleres? Registrar patrón para siguiente reto.", asignar_a_rol: "coordinador", prioridad: "urgente", semanas_activas: [3,4] },
+  { nombre: "Meta cumplida", campo: "pct_avance", operador: ">=", valor: "100", condicion_extra: false, accion_tipo: "celebrar", accion_mensaje: "🎉 ¡{nombre} cumplió su meta al {pct_avance}%! Celebrar públicamente y proponer meta extendida.", asignar_a_rol: "mentora", prioridad: "media", semanas_activas: [1,2,3,4] },
 ];
 
 export default function ReglasMetodo() {
@@ -312,7 +314,7 @@ export default function ReglasMetodo() {
       }));
       await supabase.from("reglas_metodo").insert(inserts);
       queryClient.invalidateQueries({ queryKey: ["reglas-metodo"] });
-      toast({ title: "8 reglas predefinidas cargadas" });
+      toast({ title: "10 reglas del Método cargadas", description: "Puedes editarlas, borrar las que no necesites o agregar nuevas." });
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
@@ -371,7 +373,7 @@ export default function ReglasMetodo() {
         </div>
       ) : visibleReglas.length === 0 ? (
         <div className="rounded-lg border bg-card p-8 text-center text-muted-foreground">
-          No hay reglas {showInactive ? "" : "activas "}configuradas. Crea una nueva o carga las predefinidas.
+          No hay reglas {showInactive ? "" : "activas "}configuradas. Crea una nueva o carga la plantilla del Método.
         </div>
       ) : (
         <div className="rounded-lg border bg-card overflow-auto">
@@ -453,7 +455,7 @@ export default function ReglasMetodo() {
         <div className="flex justify-center">
           <Button variant="outline" onClick={() => setConfirmPredefined(true)} disabled={loadingPredefined}>
             <BookOpen className="mr-1.5 h-4 w-4" />
-            Cargar reglas predefinidas del Método
+            Cargar plantilla del Método
           </Button>
         </div>
       )}
@@ -462,9 +464,9 @@ export default function ReglasMetodo() {
       <AlertDialog open={confirmPredefined} onOpenChange={setConfirmPredefined}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Cargar reglas predefinidas?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Se agregarán 8 reglas base del Método de Desarrollo de Ventas a las reglas existentes.
+             <AlertDialogTitle>¿Cargar 10 reglas base del Método?</AlertDialogTitle>
+             <AlertDialogDescription>
+               Se agregarán 10 reglas base del Método. Puedes editarlas después, borrar las que no necesites o agregar nuevas.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
