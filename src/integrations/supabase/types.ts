@@ -187,6 +187,62 @@ export type Database = {
           },
         ]
       }
+      agenda_metodo: {
+        Row: {
+          actividades: Json | null
+          created_at: string | null
+          descripcion: string | null
+          dia_numero: number
+          dia_semana: string
+          id: string
+          reto_id: string
+          rol_coordinador: string | null
+          rol_desarrolladora: string | null
+          rol_mentora: string | null
+          semana: number
+          tarea_socia: string | null
+          titulo: string
+        }
+        Insert: {
+          actividades?: Json | null
+          created_at?: string | null
+          descripcion?: string | null
+          dia_numero: number
+          dia_semana: string
+          id?: string
+          reto_id: string
+          rol_coordinador?: string | null
+          rol_desarrolladora?: string | null
+          rol_mentora?: string | null
+          semana: number
+          tarea_socia?: string | null
+          titulo: string
+        }
+        Update: {
+          actividades?: Json | null
+          created_at?: string | null
+          descripcion?: string | null
+          dia_numero?: number
+          dia_semana?: string
+          id?: string
+          reto_id?: string
+          rol_coordinador?: string | null
+          rol_desarrolladora?: string | null
+          rol_mentora?: string | null
+          semana?: number
+          tarea_socia?: string | null
+          titulo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agenda_metodo_reto_id_fkey"
+            columns: ["reto_id"]
+            isOneToOne: false
+            referencedRelation: "retos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       alertas: {
         Row: {
           asignada_a: string | null
