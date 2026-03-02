@@ -109,200 +109,179 @@ export function WizardStep3({ form, setForm }: Props) {
       try {
         const wb = XLSX.read(e.target?.result, { type: "binary" });
         const ws = wb.Sheets[wb.SheetNames[0]];
-        // Use header:1 to get raw arrays — avoids header-name issues with BOM/spaces
-        const rawData: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
+        // Use defval:"" to get objects with header keys — handles empty cells
+        const rawData: any[] = XLSX.utils.sheet_to_json(ws, { defval: "" });
 
-        if (rawData.length < 2) {
+        if (rawData.length === 0) {
           toast({ title: "Excel vacío o sin datos", variant: "destructive" });
           return;
         }
 
-        // Flexible column detection helpers
-        const normalize = (s: string) =>
-          (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[_\s]+/g, " ").trim();
+        // Debug: show what was read
+        console.log("=== DEBUG EXCEL ASIGNACIONES ===");
+        console.log("Filas leídas:", rawData.length);
+        console.log("Headers:", Object.keys(rawData[0] || {}));
+        console.log("Primera fila:", rawData[0]);
 
-        const findColIndex = (headers: string[], possibleNames: string[]): number => {
-          const nh = headers.map(h => normalize(String(h || "")));
-          const nn = possibleNames.map(normalize);
-          for (const name of nn) { const idx = nh.indexOf(name); if (idx !== -1) return idx; }
-          for (const name of nn) { const idx = nh.findIndex(h => h.startsWith(name)); if (idx !== -1) return idx; }
-          for (const name of nn) { const idx = nh.findIndex(h => h.includes(name)); if (idx !== -1) return idx; }
-          return -1;
+        // Normalize helper for flexible header matching
+        const normalizeHeader = (s: any): string =>
+          String(s ?? "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[_\s]+/g, " ").trim();
+
+        // For each row, find matching keys flexibly
+        const keys = Object.keys(rawData[0] || {});
+        const findKey = (options: string[]): string => {
+          const normalizedOptions = options.map(normalizeHeader);
+          // Exact match first
+          let found = keys.find(k => normalizedOptions.includes(normalizeHeader(k)));
+          if (found) return found;
+          // Partial/includes match
+          found = keys.find(k => {
+            const nk = normalizeHeader(k);
+            return normalizedOptions.some(o => nk.includes(o) || o.includes(nk));
+          });
+          return found || "";
         };
 
-        const headers = (rawData[0] || []).map(h => String(h || ""));
-        const dataRows = rawData.slice(1).filter(r => r && r.length > 0);
+        const idKey = findKey(["id_socia", "id socia", "id", "socia"]);
+        const coordKey = findKey(["coordinador", "coordinadora", "coord"]);
+        const devKey = findKey(["desarrolladora", "dev", "desarr"]);
+        const mentKey = findKey(["mentora", "ment"]);
 
-        const idIdx = findColIndex(headers, ["id_socia", "id socia", "id", "socia"]);
-        const coordIdx = findColIndex(headers, ["coordinador", "coord", "coordinadora"]);
-        const devIdx = findColIndex(headers, ["desarrolladora", "dev", "desarr", "desarrollo"]);
-        const mentIdx = findColIndex(headers, ["mentora", "ment"]);
+        console.log("Keys encontradas:", { idKey, coordKey, devKey, mentKey });
 
-        console.log("=== DEBUG EXCEL ASIGNACIONES ===");
-        console.log("Headers encontrados:", headers);
-        console.log("Índices:", { idIdx, coordIdx, devIdx, mentIdx });
-
-        if (idIdx === -1) {
-          toast({ title: "No se encontró columna 'id_socia'", description: `Headers: ${headers.join(", ")}`, variant: "destructive" });
+        if (!idKey) {
+          toast({ title: "No se encontró columna 'id_socia'", description: `Headers: ${keys.join(", ")}`, variant: "destructive" });
           return;
         }
 
-        // Extract unique values for debug
-        const excelEmails = new Set<string>();
-        const excelMentNames = new Set<string>();
-        for (const row of dataRows) {
-          if (coordIdx >= 0 && row[coordIdx]) excelEmails.add(String(row[coordIdx]).trim());
-          if (devIdx >= 0 && row[devIdx]) excelEmails.add(String(row[devIdx]).trim());
-          if (mentIdx >= 0 && row[mentIdx]) excelMentNames.add(String(row[mentIdx]).trim());
-        }
-        console.log("Emails únicos del Excel:", [...excelEmails]);
-        console.log("Nombres mentoras del Excel:", [...excelMentNames]);
-        console.log("Coordinadores en BD:", (coordinadores || []).map((u: any) => ({ id: u.id, email: u.email, nombre: u.nombre })));
-        console.log("Desarrolladoras en BD:", (desarrolladoras || []).map((u: any) => ({ id: u.id, email: u.email, nombre: u.nombre })));
-        console.log("Mentoras en BD:", (mentoras || []).map((m: any) => ({ id: m.id, nombre: m.nombre })));
-        if (dataRows.length > 0) {
-          console.log("Primera fila parseada:", {
-            id_socia: String(dataRows[0][idIdx] || ""),
-            coord: coordIdx >= 0 ? String(dataRows[0][coordIdx] || "") : "N/A",
-            dev: devIdx >= 0 ? String(dataRows[0][devIdx] || "") : "N/A",
-            mentora: mentIdx >= 0 ? String(dataRows[0][mentIdx] || "") : "N/A",
-          });
-        }
+        // Extract rows
+        const rows = rawData.map((row: any) => ({
+          id_socia: String(row[idKey] || "").trim(),
+          coordinador_email: String(row[coordKey] || "").trim().toLowerCase(),
+          desarrolladora_email: String(row[devKey] || "").trim().toLowerCase(),
+          mentora_nombre: String(row[mentKey] || "").trim(),
+        }));
 
-        const assignmentMap = new Map<string, { coordinador_id?: string; desarrolladora_id?: string; mentora_id?: string }>();
-        const errors: string[] = [];
-        const matchLog: string[] = [];
-        let processed = 0;
+        console.log("Emails coordinador únicos:", [...new Set(rows.map(r => r.coordinador_email).filter(Boolean))]);
+        console.log("Emails desarrolladora únicos:", [...new Set(rows.map(r => r.desarrolladora_email).filter(Boolean))]);
+        console.log("Nombres mentora únicos:", [...new Set(rows.map(r => r.mentora_nombre).filter(Boolean))]);
 
-        // Helper: tolerant email match
-        const findByEmail = (list: any[] | undefined, rawEmail: string) => {
-          const safeList = list || [];
-          const email = rawEmail.trim().toLowerCase();
-          if (!email) return null;
-          let found = safeList.find((u: any) => (u.email || "").trim().toLowerCase() === email);
-          if (found) return found;
-          found = safeList.find((u: any) => {
-            const ue = (u.email || "").trim().toLowerCase();
-            return ue.includes(email) || email.includes(ue);
-          });
-          return found || null;
+        // Fetch users and mentoras from DB
+        const fetchUsers = async () => {
+          const { data: usuarios } = await supabase
+            .from("usuarios").select("id, email, nombre, rol").eq("activo", true);
+          const { data: mentorasDB } = await supabase
+            .from("mentoras").select("id, nombre").eq("activa", true);
+
+          const usersList = usuarios || [];
+          const mentorasList = mentorasDB || [];
+
+          console.log("Usuarios en BD:", usersList.map(u => `${u.email} (${u.rol})`));
+          console.log("Mentoras en BD:", mentorasList.map(m => m.nombre));
+
+          const currentForm = formRef.current;
+          const currentSocias = currentForm.socias || [];
+          const updatedSocias = [...currentSocias];
+          const errors: string[] = [];
+          const matchLog: string[] = [];
+          let matched = 0;
+
+          for (const row of rows) {
+            if (!row.id_socia) continue;
+
+            const sociaIndex = updatedSocias.findIndex(s => s.id_socia === row.id_socia && !s.error);
+            if (sociaIndex === -1) {
+              errors.push(`${row.id_socia}: socia no encontrada en paso 2`);
+              matchLog.push(`⚠️ ${row.id_socia}: no existe en socias del wizard`);
+              continue;
+            }
+
+            const socia = { ...updatedSocias[sociaIndex] };
+
+            // Match coordinador por email
+            if (row.coordinador_email) {
+              const coord = usersList.find(u =>
+                u.email.toLowerCase().trim() === row.coordinador_email &&
+                (u.rol === "coordinador" || u.rol === "gerente" || u.rol === "director")
+              ) || usersList.find(u => u.email.toLowerCase().trim() === row.coordinador_email);
+              if (coord) {
+                socia.coordinador_id = coord.id;
+                matchLog.push(`✅ ${row.id_socia} coord: "${row.coordinador_email}" → ${coord.nombre}`);
+              } else {
+                errors.push(`${row.id_socia}: coordinador "${row.coordinador_email}" no encontrado`);
+                matchLog.push(`❌ ${row.id_socia} coord: "${row.coordinador_email}" → NO ENCONTRADO`);
+              }
+            }
+
+            // Match desarrolladora por email
+            if (row.desarrolladora_email) {
+              const dev = usersList.find(u =>
+                u.email.toLowerCase().trim() === row.desarrolladora_email &&
+                u.rol === "desarrolladora"
+              ) || usersList.find(u => u.email.toLowerCase().trim() === row.desarrolladora_email);
+              if (dev) {
+                socia.desarrolladora_id = dev.id;
+                matchLog.push(`✅ ${row.id_socia} desa: "${row.desarrolladora_email}" → ${dev.nombre}`);
+              } else {
+                errors.push(`${row.id_socia}: desarrolladora "${row.desarrolladora_email}" no encontrada`);
+                matchLog.push(`❌ ${row.id_socia} desa: "${row.desarrolladora_email}" → NO ENCONTRADA`);
+              }
+            }
+
+            // Match mentora por nombre
+            if (row.mentora_nombre) {
+              const ment = mentorasList.find(m =>
+                m.nombre.toLowerCase().trim() === row.mentora_nombre.toLowerCase().trim()
+              ) || mentorasList.find(m => {
+                const mn = m.nombre.toLowerCase().trim();
+                const rn = row.mentora_nombre.toLowerCase().trim();
+                return mn.includes(rn) || rn.includes(mn);
+              });
+              if (ment) {
+                socia.mentora_id = ment.id;
+                matchLog.push(`✅ ${row.id_socia} mentora: "${row.mentora_nombre}" → ${ment.nombre}`);
+              } else {
+                errors.push(`${row.id_socia}: mentora "${row.mentora_nombre}" no encontrada`);
+                matchLog.push(`❌ ${row.id_socia} mentora: "${row.mentora_nombre}" → NO ENCONTRADA`);
+              }
+            }
+
+            updatedSocias[sociaIndex] = socia;
+            matched++;
+          }
+
+          // Build counts
+          const counts: string[] = [];
+          const coordCounts: Record<string, number> = {};
+          const desaCounts: Record<string, number> = {};
+          const mentCounts: Record<string, number> = {};
+          for (const s of updatedSocias.filter(s => !s.error)) {
+            if (s.coordinador_id) {
+              const u = usersList.find(u => u.id === s.coordinador_id);
+              if (u) coordCounts[u.nombre] = (coordCounts[u.nombre] || 0) + 1;
+            }
+            if (s.desarrolladora_id) {
+              const u = usersList.find(u => u.id === s.desarrolladora_id);
+              if (u) desaCounts[u.nombre] = (desaCounts[u.nombre] || 0) + 1;
+            }
+            if (s.mentora_id) {
+              const m = mentorasList.find(m => m.id === s.mentora_id);
+              if (m) mentCounts[m.nombre] = (mentCounts[m.nombre] || 0) + 1;
+            }
+          }
+          if (Object.keys(coordCounts).length) counts.push(`Coordinadores: ${Object.entries(coordCounts).map(([n, c]) => `${n} (${c})`).join(", ")}`);
+          if (Object.keys(desaCounts).length) counts.push(`Desarrolladoras: ${Object.entries(desaCounts).map(([n, c]) => `${n} (${c})`).join(", ")}`);
+          if (Object.keys(mentCounts).length) counts.push(`Mentoras: ${Object.entries(mentCounts).map(([n, c]) => `${n} (${c})`).join(", ")}`);
+
+          console.log("Matched:", matched, "Errors:", errors.length, errors.slice(0, 5));
+          console.log("Counts:", counts);
+
+          setExcelResult({ processed: rows.filter(r => r.id_socia).length, counts, errors, matchLog });
+          setForm({ ...currentForm, socias: updatedSocias });
+          toast({ title: "✅ Asignaciones guardadas", description: `${matched} socias asignadas, ${errors.length} errores` });
         };
 
-        // Helper: tolerant name match for mentoras
-        const findMentora = (rawName: string) => {
-          const safeMentoras = mentoras || [];
-          const name = rawName.trim().toLowerCase();
-          if (!name) return null;
-          let found = safeMentoras.find((m: any) => (m.nombre || "").trim().toLowerCase() === name);
-          if (found) return found;
-          found = safeMentoras.find((m: any) => {
-            const mn = (m.nombre || "").trim().toLowerCase();
-            return mn.includes(name) || name.includes(mn);
-          });
-          return found || null;
-        };
-
-        for (const row of dataRows) {
-          const idSocia = String(row[idIdx] ?? "").trim();
-          if (!idSocia) continue;
-
-          const assignment: { coordinador_id?: string; desarrolladora_id?: string; mentora_id?: string } = {};
-
-          const coordEmail = coordIdx >= 0 ? String(row[coordIdx] ?? "").trim() : "";
-          if (coordEmail) {
-            const u = findByEmail(coordinadores, coordEmail);
-            if (u) {
-              assignment.coordinador_id = u.id;
-              matchLog.push(`✅ ${idSocia} coord: "${coordEmail}" → ${u.nombre}`);
-            } else {
-              errors.push(`${idSocia}: coordinador "${coordEmail}" no encontrado`);
-              matchLog.push(`❌ ${idSocia} coord: "${coordEmail}" → NO ENCONTRADO`);
-            }
-          }
-
-          const desaEmail = devIdx >= 0 ? String(row[devIdx] ?? "").trim() : "";
-          if (desaEmail) {
-            const u = findByEmail(desarrolladoras, desaEmail);
-            if (u) {
-              assignment.desarrolladora_id = u.id;
-              matchLog.push(`✅ ${idSocia} desa: "${desaEmail}" → ${u.nombre}`);
-            } else {
-              errors.push(`${idSocia}: desarrolladora "${desaEmail}" no encontrada`);
-              matchLog.push(`❌ ${idSocia} desa: "${desaEmail}" → NO ENCONTRADA`);
-            }
-          }
-
-          const mentNombre = mentIdx >= 0 ? String(row[mentIdx] ?? "").trim() : "";
-          if (mentNombre) {
-            const m = findMentora(mentNombre);
-            if (m) {
-              assignment.mentora_id = m.id;
-              matchLog.push(`✅ ${idSocia} mentora: "${mentNombre}" → ${m.nombre}`);
-            } else {
-              errors.push(`${idSocia}: mentora "${mentNombre}" no encontrada`);
-              matchLog.push(`❌ ${idSocia} mentora: "${mentNombre}" → NO ENCONTRADA`);
-            }
-          }
-
-          assignmentMap.set(idSocia, assignment);
-          processed++;
-        }
-
-        console.log("Assignments map size:", assignmentMap.size);
-        console.log("Sample assignments:", [...assignmentMap.entries()].slice(0, 3));
-
-        // Use formRef to get latest form state
-        const currentForm = formRef.current;
-        
-        const currentSocias = currentForm.socias || [];
-        console.log("Current socias count:", currentSocias.length);
-        console.log("Sample socia ids:", currentSocias.slice(0, 5).map(s => s.id_socia));
-
-        let matchedCount = 0;
-        const updatedSocias = currentSocias.map(s => {
-          if (s.error) return s;
-          const a = assignmentMap.get(s.id_socia);
-          if (!a) return s;
-          matchedCount++;
-          return {
-            ...s,
-            ...(a.coordinador_id !== undefined && { coordinador_id: a.coordinador_id }),
-            ...(a.desarrolladora_id !== undefined && { desarrolladora_id: a.desarrolladora_id }),
-            ...(a.mentora_id !== undefined && { mentora_id: a.mentora_id }),
-          };
-        });
-
-        console.log("Socias matched with assignments:", matchedCount);
-        console.log("Sample updated socia:", updatedSocias.find(s => s.coordinador_id));
-
-        // Check for socias in Excel but not in wizard
-        for (const idSocia of assignmentMap.keys()) {
-          if (!currentSocias.some(s => s.id_socia === idSocia && !s.error)) {
-            errors.push(`${idSocia}: socia no encontrada en paso 2`);
-            matchLog.push(`⚠️ ${idSocia}: no existe en socias del wizard`);
-          }
-        }
-
-        // Build counts
-        const counts: string[] = [];
-        const coordCounts: Record<string, number> = {};
-        const desaCounts: Record<string, number> = {};
-        const mentCounts: Record<string, number> = {};
-        for (const s of (updatedSocias || []).filter(s => !s.error)) {
-          if (s.coordinador_id) { const u = (coordinadores || []).find((u: any) => u.id === s.coordinador_id); if (u) coordCounts[u.nombre] = (coordCounts[u.nombre] || 0) + 1; }
-          if (s.desarrolladora_id) { const u = (desarrolladoras || []).find((u: any) => u.id === s.desarrolladora_id); if (u) desaCounts[u.nombre] = (desaCounts[u.nombre] || 0) + 1; }
-          if (s.mentora_id) { const m = (mentoras || []).find((m: any) => m.id === s.mentora_id); if (m) mentCounts[m.nombre] = (mentCounts[m.nombre] || 0) + 1; }
-        }
-        if (Object.keys(coordCounts).length) counts.push(`Coordinadores: ${Object.entries(coordCounts).map(([n, c]) => `${n} (${c})`).join(", ")}`);
-        if (Object.keys(desaCounts).length) counts.push(`Desarrolladoras: ${Object.entries(desaCounts).map(([n, c]) => `${n} (${c})`).join(", ")}`);
-        if (Object.keys(mentCounts).length) counts.push(`Mentoras: ${Object.entries(mentCounts).map(([n, c]) => `${n} (${c})`).join(", ")}`);
-
-        console.log("Counts:", counts);
-        console.log("Errors:", errors);
-
-        setExcelResult({ processed, counts, errors, matchLog });
-        setForm({ ...currentForm, socias: updatedSocias });
-        toast({ title: "✅ Asignaciones guardadas", description: `${processed} socias, ${matchedCount} asignadas, ${errors.length} errores` });
+        fetchUsers();
       } catch (err: any) {
         console.error("Excel processing error:", err);
         toast({ title: "Error al leer Excel", description: err.message, variant: "destructive" });
