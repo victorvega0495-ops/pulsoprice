@@ -1,0 +1,1 @@
+ALTER TABLE public.acciones_operativas ADD COLUMN sub_tareas JSONB DEFAULT '[]';

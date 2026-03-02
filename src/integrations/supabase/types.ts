@@ -35,6 +35,7 @@ export type Database = {
           resultado: string | null
           reto_id: string
           socia_reto_id: string
+          sub_tareas: Json | null
           tactica: string | null
           tipo: string
           titulo: string
@@ -61,6 +62,7 @@ export type Database = {
           resultado?: string | null
           reto_id: string
           socia_reto_id: string
+          sub_tareas?: Json | null
           tactica?: string | null
           tipo?: string
           titulo: string
@@ -87,6 +89,7 @@ export type Database = {
           resultado?: string | null
           reto_id?: string
           socia_reto_id?: string
+          sub_tareas?: Json | null
           tactica?: string | null
           tipo?: string
           titulo?: string
