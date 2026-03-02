@@ -1,10 +1,5 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
-import { Copy, FileX } from "lucide-react";
 import type { RetoFormData } from "../RetoWizard";
 
 interface Props {
@@ -15,34 +10,6 @@ interface Props {
 const DIA_LABELS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
 export function WizardStep4({ form, setForm }: Props) {
-  const [reglasDecision, setReglasDecision] = useState<"none" | "duplicate" | "scratch">("none");
-
-  const { data: lastReto } = useQuery({
-    queryKey: ["ultimo-reto-cerrado"],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("retos")
-        .select("id, nombre, pesos_semanales, pesos_diarios")
-        .eq("estado", "cerrado")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      return data;
-    },
-  });
-
-  const { data: reglasCount = 0 } = useQuery({
-    queryKey: ["reglas-ultimo-reto", lastReto?.id],
-    enabled: !!lastReto?.id,
-    queryFn: async () => {
-      const { count } = await supabase
-        .from("reglas_metodo")
-        .select("id", { count: "exact", head: true })
-        .eq("reto_id", lastReto!.id);
-      return count || 0;
-    },
-  });
-
   const totalSemanal = form.pesos_semanales.reduce((a, b) => a + b, 0);
   const totalDiario = form.pesos_diarios.reduce((a, b) => a + b, 0);
 
@@ -58,60 +25,12 @@ export function WizardStep4({ form, setForm }: Props) {
     setForm({ ...form, pesos_diarios: next });
   };
 
-  const duplicarReglas = () => {
-    if (lastReto) {
-      const pesos = Array.isArray(lastReto.pesos_semanales)
-        ? (lastReto.pesos_semanales as number[])
-        : form.pesos_semanales;
-      const diarios = Array.isArray(lastReto.pesos_diarios)
-        ? (lastReto.pesos_diarios as number[])
-        : form.pesos_diarios;
-      setForm({ ...form, pesos_semanales: pesos, pesos_diarios: diarios, duplicar_reglas: true, reglas_reto_origen_id: lastReto.id });
-      setReglasDecision("duplicate");
-    }
-  };
-
-  const empezarDeCero = () => {
-    setForm({ ...form, duplicar_reglas: false, reglas_reto_origen_id: undefined });
-    setReglasDecision("scratch");
-  };
-
   return (
     <div className="space-y-8 max-w-2xl">
-      {/* Rules decision */}
-      <div>
-        <h3 className="text-lg font-semibold mb-1">Reglas del Método</h3>
-        <p className="text-sm text-muted-foreground mb-4">
-          Define las reglas que generarán acciones automáticas durante el reto.
-        </p>
-
-        {reglasDecision === "none" && (
-          <div className="flex gap-3">
-            {lastReto && (
-              <Button variant="outline" onClick={duplicarReglas}>
-                <Copy className="mr-2 h-4 w-4" />
-                Duplicar de "{lastReto.nombre}" ({reglasCount} reglas)
-              </Button>
-            )}
-            <Button variant="outline" onClick={empezarDeCero}>
-              <FileX className="mr-2 h-4 w-4" />
-              Empezar de cero
-            </Button>
-          </div>
-        )}
-
-        {reglasDecision === "duplicate" && (
-          <p className="text-sm text-emerald-400 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3">
-            ✓ Se copiarán {reglasCount} reglas de "{lastReto?.nombre}" al publicar el reto.
-          </p>
-        )}
-
-        {reglasDecision === "scratch" && (
-          <p className="text-sm text-muted-foreground rounded-lg border p-3 bg-secondary/50">
-            Sin reglas predefinidas. Podrás agregarlas desde Reglas del Método después de publicar.
-          </p>
-        )}
-      </div>
+      <h3 className="text-lg font-semibold mb-1">Configuración de Metas</h3>
+      <p className="text-sm text-muted-foreground mb-4">
+        Define la distribución de metas por semana y por día.
+      </p>
 
       {/* Weekly weights */}
       <div>
