@@ -444,10 +444,10 @@ export function WizardStep3({ form, setForm }: Props) {
                 </div>
               )}
               {/* Match log for debugging */}
-              {excelResult.matchLog.length > 0 && (
+              {excelResult.matchLog && excelResult.matchLog.length > 0 && (
                 <details className="mt-3">
                   <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
-                    Ver detalle de matching ({excelResult.matchLog.length} operaciones)
+                    Ver detalle de matching ({excelResult.matchLog?.length ?? 0} operaciones)
                   </summary>
                   <div className="mt-2 max-h-48 overflow-y-auto space-y-0.5 rounded border p-2 bg-muted/30">
                     {excelResult.matchLog.map((line, i) => (
