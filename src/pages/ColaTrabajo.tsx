@@ -562,7 +562,7 @@ export default function ColaTrabajo() {
                   <div className="flex flex-col items-center gap-1 shrink-0 pt-6">
                     {socia?.telefono ? (
                       <Button size="icon" variant="outline" className="h-9 w-9 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300" asChild title="WhatsApp">
-                        <a href={`https://wa.me/${socia.telefono.replace(/\D/g, "")}?text=${encodeURIComponent(`Hola ${accion.socia_nombre || "socia"}, soy tu asesora del Reto Price Shoes`)}`} target="_blank" rel="noopener noreferrer">
+                        <a href={`https://wa.me/52${socia.telefono.replace(/\D/g, "")}?text=${encodeURIComponent(`Hola ${accion.socia_nombre || "socia"}, soy tu asesora del Reto Price Shoes`)}`} target="_blank" rel="noopener noreferrer">
                           <MessageSquare className="h-4 w-4" />
                         </a>
                       </Button>
