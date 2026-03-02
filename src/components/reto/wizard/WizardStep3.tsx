@@ -65,21 +65,22 @@ export function WizardStep3({ form, setForm }: Props) {
     },
   });
 
-  const validSocias = form.socias.filter((s) => !s.error);
+  const socias = form.socias || [];
+  const validSocias = socias.filter((s) => !s.error);
   const tiendas = useMemo(() => [...new Set(validSocias.map(s => s.tienda_visita))].sort(), [validSocias]);
 
   // Counts
   const countBy = (field: string, id: string) =>
-    form.socias.filter((s) => !s.error && (s as any)[field] === id).length;
+    socias.filter((s) => !s.error && (s as any)[field] === id).length;
   const sinCoordinador = validSocias.filter((s) => !s.coordinador_id).length;
   const sinDesarrolladora = validSocias.filter((s) => !s.desarrolladora_id).length;
   const sinMentora = validSocias.filter((s) => !s.mentora_id).length;
 
   // Auto-assign functions
   const autoAssign = (field: "coordinador_id" | "desarrolladora_id", users: any[]) => {
-    if (users.length === 0) return;
+    if ((users || []).length === 0) return;
     const tiendasList = [...new Set(validSocias.map((s) => s.tienda_visita))];
-    const updated = [...form.socias];
+    const updated = [...socias];
     let idx = 0;
     tiendasList.forEach((tienda) => {
       updated.filter((s) => s.tienda_visita === tienda && !s.error).forEach((s) => {
@@ -92,8 +93,8 @@ export function WizardStep3({ form, setForm }: Props) {
   };
 
   const autoAssignMentoras = () => {
-    if (mentoras.length === 0) return;
-    const updated = [...form.socias];
+    if ((mentoras || []).length === 0) return;
+    const updated = [...socias];
     updated.filter((s) => !s.error).forEach((s, i) => {
       s.mentora_id = mentoras[i % mentoras.length].id;
     });
@@ -121,9 +122,9 @@ export function WizardStep3({ form, setForm }: Props) {
         console.log("=== DEBUG EXCEL ASIGNACIONES ===");
         console.log("Emails únicos del Excel:", [...excelEmails]);
         console.log("Nombres mentoras del Excel:", [...excelMentNames]);
-        console.log("Coordinadores en BD:", coordinadores.map((u: any) => ({ id: u.id, email: u.email, nombre: u.nombre })));
-        console.log("Desarrolladoras en BD:", desarrolladoras.map((u: any) => ({ id: u.id, email: u.email, nombre: u.nombre })));
-        console.log("Mentoras en BD:", mentoras.map((m: any) => ({ id: m.id, nombre: m.nombre })));
+        console.log("Coordinadores en BD:", (coordinadores || []).map((u: any) => ({ id: u.id, email: u.email, nombre: u.nombre })));
+        console.log("Desarrolladoras en BD:", (desarrolladoras || []).map((u: any) => ({ id: u.id, email: u.email, nombre: u.nombre })));
+        console.log("Mentoras en BD:", (mentoras || []).map((m: any) => ({ id: m.id, nombre: m.nombre })));
 
         const assignmentMap = new Map<string, { coordinador_id?: string; desarrolladora_id?: string; mentora_id?: string }>();
         const errors: string[] = [];
@@ -131,24 +132,22 @@ export function WizardStep3({ form, setForm }: Props) {
         let processed = 0;
 
         // Helper: tolerant email match
-        const findByEmail = (list: any[], rawEmail: string) => {
+        const findByEmail = (list: any[] | undefined, rawEmail: string) => {
+          const safeList = list || [];
           const email = rawEmail.trim().toLowerCase();
-          // Exact match first
-          let found = list.find((u: any) => u.email.trim().toLowerCase() === email);
+          let found = safeList.find((u: any) => u.email?.trim().toLowerCase() === email);
           if (found) return found;
-          // Partial match: check if email contains or is contained
-          found = list.find((u: any) => u.email.trim().toLowerCase().includes(email) || email.includes(u.email.trim().toLowerCase()));
+          found = safeList.find((u: any) => u.email?.trim().toLowerCase().includes(email) || email.includes(u.email?.trim().toLowerCase()));
           return found || null;
         };
 
         // Helper: tolerant name match for mentoras
         const findMentora = (rawName: string) => {
+          const safeMentoras = mentoras || [];
           const name = rawName.trim().toLowerCase();
-          // Exact match
-          let found = mentoras.find((m: any) => m.nombre.trim().toLowerCase() === name);
+          let found = safeMentoras.find((m: any) => m.nombre?.trim().toLowerCase() === name);
           if (found) return found;
-          // Partial/includes match
-          found = mentoras.find((m: any) => m.nombre.trim().toLowerCase().includes(name) || name.includes(m.nombre.trim().toLowerCase()));
+          found = safeMentoras.find((m: any) => m.nombre?.trim().toLowerCase().includes(name) || name.includes(m.nombre?.trim().toLowerCase()));
           return found || null;
         };
 
@@ -204,11 +203,12 @@ export function WizardStep3({ form, setForm }: Props) {
         // Use formRef to get latest form state
         const currentForm = formRef.current;
         
-        console.log("Current socias count:", currentForm.socias.length);
-        console.log("Sample socia ids:", currentForm.socias.slice(0, 5).map(s => s.id_socia));
+        const currentSocias = currentForm.socias || [];
+        console.log("Current socias count:", currentSocias.length);
+        console.log("Sample socia ids:", currentSocias.slice(0, 5).map(s => s.id_socia));
 
         let matchedCount = 0;
-        const updatedSocias = currentForm.socias.map(s => {
+        const updatedSocias = currentSocias.map(s => {
           if (s.error) return s;
           const a = assignmentMap.get(s.id_socia);
           if (!a) return s;
@@ -226,7 +226,7 @@ export function WizardStep3({ form, setForm }: Props) {
 
         // Check for socias in Excel but not in wizard
         for (const idSocia of assignmentMap.keys()) {
-          if (!currentForm.socias.some(s => s.id_socia === idSocia && !s.error)) {
+          if (!currentSocias.some(s => s.id_socia === idSocia && !s.error)) {
             errors.push(`${idSocia}: socia no encontrada en paso 2`);
             matchLog.push(`⚠️ ${idSocia}: no existe en socias del wizard`);
           }
@@ -237,10 +237,10 @@ export function WizardStep3({ form, setForm }: Props) {
         const coordCounts: Record<string, number> = {};
         const desaCounts: Record<string, number> = {};
         const mentCounts: Record<string, number> = {};
-        for (const s of updatedSocias.filter(s => !s.error)) {
-          if (s.coordinador_id) { const u = coordinadores.find((u: any) => u.id === s.coordinador_id); if (u) coordCounts[u.nombre] = (coordCounts[u.nombre] || 0) + 1; }
-          if (s.desarrolladora_id) { const u = desarrolladoras.find((u: any) => u.id === s.desarrolladora_id); if (u) desaCounts[u.nombre] = (desaCounts[u.nombre] || 0) + 1; }
-          if (s.mentora_id) { const m = mentoras.find((m: any) => m.id === s.mentora_id); if (m) mentCounts[m.nombre] = (mentCounts[m.nombre] || 0) + 1; }
+        for (const s of (updatedSocias || []).filter(s => !s.error)) {
+          if (s.coordinador_id) { const u = (coordinadores || []).find((u: any) => u.id === s.coordinador_id); if (u) coordCounts[u.nombre] = (coordCounts[u.nombre] || 0) + 1; }
+          if (s.desarrolladora_id) { const u = (desarrolladoras || []).find((u: any) => u.id === s.desarrolladora_id); if (u) desaCounts[u.nombre] = (desaCounts[u.nombre] || 0) + 1; }
+          if (s.mentora_id) { const m = (mentoras || []).find((m: any) => m.id === s.mentora_id); if (m) mentCounts[m.nombre] = (mentCounts[m.nombre] || 0) + 1; }
         }
         if (Object.keys(coordCounts).length) counts.push(`Coordinadores: ${Object.entries(coordCounts).map(([n, c]) => `${n} (${c})`).join(", ")}`);
         if (Object.keys(desaCounts).length) counts.push(`Desarrolladoras: ${Object.entries(desaCounts).map(([n, c]) => `${n} (${c})`).join(", ")}`);
@@ -277,7 +277,7 @@ export function WizardStep3({ form, setForm }: Props) {
   // Bulk assign selected
   const handleBulkAssign = () => {
     if (!bulkRole || !bulkUser || selected.size === 0) return;
-    const updated = [...form.socias];
+    const updated = [...socias];
     for (const s of updated) {
       if (selected.has(s.id_socia) && !s.error) {
         (s as any)[bulkRole] = bulkUser;
@@ -290,7 +290,7 @@ export function WizardStep3({ form, setForm }: Props) {
 
   // Update single socia assignment
   const updateSocia = (idSocia: string, field: string, value: string) => {
-    const updated = form.socias.map(s =>
+    const updated = socias.map(s =>
       s.id_socia === idSocia ? { ...s, [field]: value || undefined } : s
     );
     setForm({ ...form, socias: updated });
