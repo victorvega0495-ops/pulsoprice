@@ -25,6 +25,7 @@ import { Upload, TrendingUp, Users, Target, AlertTriangle, Search, Loader2, Undo
 import { Progress } from "@/components/ui/progress";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, Line, ComposedChart } from "recharts";
 import { SociaFicha } from "@/components/reto/SociaFicha";
+import { AgendaTab } from "@/components/reto/AgendaTab";
 
 interface Props {
   reto: any;
@@ -50,7 +51,7 @@ export function RetoPanel({ reto, onRefresh }: Props) {
   const [searchText, setSearchText] = useState("");
   const [selectedSocia, setSelectedSocia] = useState<string | null>(null);
   const [revertCarga, setRevertCarga] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState("carga");
+  const [activeTab, setActiveTab] = useState("agenda");
   const [chartWeek, setChartWeek] = useState("activa");
 
   const isManager = profile?.rol === "director" || profile?.rol === "gerente";
@@ -589,6 +590,7 @@ export function RetoPanel({ reto, onRefresh }: Props) {
       {/* ===== 7 TABS ===== */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="flex-wrap h-auto gap-1">
+          <TabsTrigger value="agenda">Agenda</TabsTrigger>
           <TabsTrigger value="carga">Carga de Ventas</TabsTrigger>
           <TabsTrigger value="resumen">Resumen Diario</TabsTrigger>
           <TabsTrigger value="grafica">Gráfica</TabsTrigger>
@@ -597,6 +599,11 @@ export function RetoPanel({ reto, onRefresh }: Props) {
           <TabsTrigger value="pareto">Pareto</TabsTrigger>
           <TabsTrigger value="socias">Socias</TabsTrigger>
         </TabsList>
+
+        {/* TAB: AGENDA */}
+        <TabsContent value="agenda">
+          <AgendaTab reto={reto} diaActual={diaActual} semanaActual={semanaActual} />
+        </TabsContent>
 
         {/* TAB 1: CARGA DE VENTAS */}
         <TabsContent value="carga" className="space-y-4">
