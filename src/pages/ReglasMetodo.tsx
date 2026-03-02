@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { countMatchingSocias, generateActionsForRule } from "@/lib/rules-engine";
 import { toast } from "@/hooks/use-toast";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -90,7 +91,7 @@ const PREDEFINED_RULES = [
 ];
 
 export default function ReglasMetodo() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const queryClient = useQueryClient();
   const [showInactive, setShowInactive] = useState(false);
   const [editingRegla, setEditingRegla] = useState<any>(null);
@@ -99,6 +100,8 @@ export default function ReglasMetodo() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [loadingPredefined, setLoadingPredefined] = useState(false);
   const [confirmPredefined, setConfirmPredefined] = useState(false);
+  const [retroModal, setRetroModal] = useState<{ regla: any; count: number } | null>(null);
+  const [generatingActions, setGeneratingActions] = useState(false);
 
   // Get active reto
   const { data: retoActivo } = useQuery({
@@ -127,6 +130,21 @@ export default function ReglasMetodo() {
         .select("*")
         .eq("reto_id", retoId)
         .order("orden");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!retoId,
+  });
+
+  // Fetch socias for current reto (for rule evaluation)
+  const { data: sociasList = [] } = useQuery({
+    queryKey: ["socias-reto-reglas", retoId],
+    queryFn: async () => {
+      if (!retoId) return [];
+      const { data, error } = await supabase
+        .from("socias_reto")
+        .select("*")
+        .eq("reto_id", retoId);
       if (error) throw error;
       return data || [];
     },
@@ -187,18 +205,50 @@ export default function ReglasMetodo() {
         activa: form.activa,
       };
 
+      let savedRegla: any;
       if (editingRegla) {
-        await supabase.from("reglas_metodo").update(payload).eq("id", editingRegla.id);
+        const { data } = await supabase.from("reglas_metodo").update(payload).eq("id", editingRegla.id).select().single();
+        savedRegla = data;
       } else {
         const maxOrden = reglas.length > 0 ? Math.max(...reglas.map((r: any) => r.orden)) + 1 : 1;
-        await supabase.from("reglas_metodo").insert({ ...payload, orden: maxOrden });
+        const { data } = await supabase.from("reglas_metodo").insert({ ...payload, orden: maxOrden }).select().single();
+        savedRegla = data;
       }
 
-      toast({ title: editingRegla ? "Regla actualizada" : "Regla creada" });
       queryClient.invalidateQueries({ queryKey: ["reglas-metodo"] });
       setModalOpen(false);
+
+      // Check if rule is active and matches existing socias
+      if (savedRegla && payload.activa) {
+        const matchCount = countMatchingSocias(savedRegla, sociasList);
+        if (matchCount > 0) {
+          setRetroModal({ regla: savedRegla, count: matchCount });
+        } else {
+          toast({ title: "Regla guardada", description: "Se evaluará en la próxima carga de ventas." });
+        }
+      } else {
+        toast({ title: editingRegla ? "Regla actualizada" : "Regla creada" });
+      }
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+  };
+
+  const handleGenerateNow = async () => {
+    if (!retroModal || !retoId || !user) return;
+    setGeneratingActions(true);
+    try {
+      const count = await generateActionsForRule(retroModal.regla, retoId, sociasList, user.id);
+      toast({
+        title: `${count} acciones generadas`,
+        description: "Ve a Cola de Trabajo para verlas.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["cola-trabajo"] });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setGeneratingActions(false);
+      setRetroModal(null);
     }
   };
 
@@ -219,8 +269,16 @@ export default function ReglasMetodo() {
   };
 
   const handleToggleActiva = async (r: any) => {
-    await supabase.from("reglas_metodo").update({ activa: !r.activa }).eq("id", r.id);
+    const newActiva = !r.activa;
+    await supabase.from("reglas_metodo").update({ activa: newActiva }).eq("id", r.id);
     queryClient.invalidateQueries({ queryKey: ["reglas-metodo"] });
+    if (newActiva) {
+      const updatedRegla = { ...r, activa: true };
+      const matchCount = countMatchingSocias(updatedRegla, sociasList);
+      if (matchCount > 0) {
+        setRetroModal({ regla: updatedRegla, count: matchCount });
+      }
+    }
   };
 
   const handleMoveOrder = async (r: any, direction: "up" | "down") => {
@@ -429,6 +487,27 @@ export default function ReglasMetodo() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Eliminar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Retroactive actions modal */}
+      <AlertDialog open={!!retroModal} onOpenChange={(o) => !o && setRetroModal(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Regla aplica a socias existentes</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta regla aplica a <strong>{retroModal?.count}</strong> socias que ya cumplen la condición hoy. ¿Qué quieres hacer?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogCancel onClick={() => setRetroModal(null)} disabled={generatingActions}>
+              Solo aplicar en próximas cargas
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleGenerateNow} disabled={generatingActions}>
+              {generatingActions && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+              Generar acciones ahora
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
