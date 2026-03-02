@@ -105,7 +105,7 @@ export function WizardStep3({ form, setForm }: Props) {
         const ws = wb.Sheets[wb.SheetNames[0]];
         const rows: any[] = XLSX.utils.sheet_to_json(ws);
 
-        const updated = [...form.socias];
+        const updated = form.socias.map(s => ({ ...s }));
         const errors: string[] = [];
         let processed = 0;
 
@@ -120,21 +120,21 @@ export function WizardStep3({ form, setForm }: Props) {
           const coordEmail = String(row.coordinador || "").trim().toLowerCase();
           if (coordEmail) {
             const u = coordinadores.find((u: any) => u.email.toLowerCase() === coordEmail);
-            if (u) (socia as any).coordinador_id = u.id;
+            if (u) socia.coordinador_id = u.id;
             else errors.push(`${idSocia}: coordinador "${coordEmail}" no encontrado`);
           }
 
           const desaEmail = String(row.desarrolladora || "").trim().toLowerCase();
           if (desaEmail) {
             const u = desarrolladoras.find((u: any) => u.email.toLowerCase() === desaEmail);
-            if (u) (socia as any).desarrolladora_id = u.id;
+            if (u) socia.desarrolladora_id = u.id;
             else errors.push(`${idSocia}: desarrolladora "${desaEmail}" no encontrada`);
           }
 
           const mentNombre = String(row.mentora || "").trim().toLowerCase();
           if (mentNombre) {
             const m = mentoras.find((m: any) => m.nombre.toLowerCase() === mentNombre);
-            if (m) (socia as any).mentora_id = m.id;
+            if (m) socia.mentora_id = m.id;
             else errors.push(`${idSocia}: mentora "${mentNombre}" no encontrada`);
           }
         }
