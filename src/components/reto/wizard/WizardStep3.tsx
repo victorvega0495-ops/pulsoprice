@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/supabase/client";
@@ -35,6 +35,10 @@ export function WizardStep3({ form, setForm }: Props) {
     counts: string[];
     errors: string[];
   } | null>(null);
+
+  // Ref to always have latest form in async callbacks (avoids stale closure)
+  const formRef = useRef(form);
+  formRef.current = form;
 
   const { data: coordinadores = [] } = useQuery({
     queryKey: ["coordinadores-activos"],
@@ -105,7 +109,8 @@ export function WizardStep3({ form, setForm }: Props) {
         const ws = wb.Sheets[wb.SheetNames[0]];
         const rows: any[] = XLSX.utils.sheet_to_json(ws);
 
-        const updated = form.socias.map(s => ({ ...s }));
+        // Build assignment map from Excel
+        const assignmentMap = new Map<string, { coordinador_id?: string; desarrolladora_id?: string; mentora_id?: string }>();
         const errors: string[] = [];
         let processed = 0;
 
@@ -113,56 +118,77 @@ export function WizardStep3({ form, setForm }: Props) {
           const idSocia = String(row.id_socia || "").trim();
           if (!idSocia) continue;
 
-          const socia = updated.find(s => s.id_socia === idSocia && !s.error);
-          if (!socia) { errors.push(`${idSocia}: socia no encontrada`); continue; }
-          processed++;
+          const assignment: { coordinador_id?: string; desarrolladora_id?: string; mentora_id?: string } = {};
 
           const coordEmail = String(row.coordinador || "").trim().toLowerCase();
           if (coordEmail) {
             const u = coordinadores.find((u: any) => u.email.toLowerCase() === coordEmail);
-            if (u) socia.coordinador_id = u.id;
+            if (u) assignment.coordinador_id = u.id;
             else errors.push(`${idSocia}: coordinador "${coordEmail}" no encontrado`);
           }
 
           const desaEmail = String(row.desarrolladora || "").trim().toLowerCase();
           if (desaEmail) {
             const u = desarrolladoras.find((u: any) => u.email.toLowerCase() === desaEmail);
-            if (u) socia.desarrolladora_id = u.id;
+            if (u) assignment.desarrolladora_id = u.id;
             else errors.push(`${idSocia}: desarrolladora "${desaEmail}" no encontrada`);
           }
 
           const mentNombre = String(row.mentora || "").trim().toLowerCase();
           if (mentNombre) {
             const m = mentoras.find((m: any) => m.nombre.toLowerCase() === mentNombre);
-            if (m) socia.mentora_id = m.id;
+            if (m) assignment.mentora_id = m.id;
             else errors.push(`${idSocia}: mentora "${mentNombre}" no encontrada`);
+          }
+
+          assignmentMap.set(idSocia, assignment);
+          processed++;
+        }
+
+        // Use formRef to get latest form state (avoids stale closure from async FileReader)
+        const currentForm = formRef.current;
+        const updatedSocias = currentForm.socias.map(s => {
+          if (s.error) return s;
+          const a = assignmentMap.get(s.id_socia);
+          if (!a) return s;
+          return {
+            ...s,
+            ...(a.coordinador_id !== undefined && { coordinador_id: a.coordinador_id }),
+            ...(a.desarrolladora_id !== undefined && { desarrolladora_id: a.desarrolladora_id }),
+            ...(a.mentora_id !== undefined && { mentora_id: a.mentora_id }),
+          };
+        });
+
+        // Check for socias in Excel but not in wizard
+        for (const idSocia of assignmentMap.keys()) {
+          if (!currentForm.socias.some(s => s.id_socia === idSocia && !s.error)) {
+            errors.push(`${idSocia}: socia no encontrada en paso 2`);
           }
         }
 
-        setForm({ ...form, socias: updated });
-
-        // Build counts
+        // Build counts from the updated array
         const counts: string[] = [];
         const coordCounts: Record<string, number> = {};
         const desaCounts: Record<string, number> = {};
         const mentCounts: Record<string, number> = {};
-        for (const s of updated.filter(s => !s.error)) {
+        for (const s of updatedSocias.filter(s => !s.error)) {
           if (s.coordinador_id) { const u = coordinadores.find((u: any) => u.id === s.coordinador_id); if (u) coordCounts[u.nombre] = (coordCounts[u.nombre] || 0) + 1; }
           if (s.desarrolladora_id) { const u = desarrolladoras.find((u: any) => u.id === s.desarrolladora_id); if (u) desaCounts[u.nombre] = (desaCounts[u.nombre] || 0) + 1; }
           if (s.mentora_id) { const m = mentoras.find((m: any) => m.id === s.mentora_id); if (m) mentCounts[m.nombre] = (mentCounts[m.nombre] || 0) + 1; }
         }
-        if (Object.keys(coordCounts).length) counts.push(`Coordinadores: ${Object.entries(coordCounts).map(([n, c]) => `${n} ${c}`).join(", ")}`);
-        if (Object.keys(desaCounts).length) counts.push(`Desarrolladoras: ${Object.entries(desaCounts).map(([n, c]) => `${n} ${c}`).join(", ")}`);
-        if (Object.keys(mentCounts).length) counts.push(`Mentoras: ${Object.entries(mentCounts).map(([n, c]) => `${n} ${c}`).join(", ")}`);
+        if (Object.keys(coordCounts).length) counts.push(`Coordinadores: ${Object.entries(coordCounts).map(([n, c]) => `${n} (${c})`).join(", ")}`);
+        if (Object.keys(desaCounts).length) counts.push(`Desarrolladoras: ${Object.entries(desaCounts).map(([n, c]) => `${n} (${c})`).join(", ")}`);
+        if (Object.keys(mentCounts).length) counts.push(`Mentoras: ${Object.entries(mentCounts).map(([n, c]) => `${n} (${c})`).join(", ")}`);
 
         setExcelResult({ processed, counts, errors });
-        toast({ title: "Asignaciones cargadas", description: `${processed} socias procesadas, ${errors.length} errores` });
+        setForm({ ...currentForm, socias: updatedSocias });
+        toast({ title: "✅ Asignaciones guardadas", description: `${processed} socias procesadas, ${errors.length} errores` });
       } catch (err: any) {
         toast({ title: "Error al leer Excel", description: err.message, variant: "destructive" });
       }
     };
     reader.readAsBinaryString(file);
-  }, [form, setForm, coordinadores, desarrolladoras, mentoras]);
+  }, [coordinadores, desarrolladoras, mentoras, setForm, formRef]);
 
   // Download unified template
   const downloadUnifiedTemplate = () => {
