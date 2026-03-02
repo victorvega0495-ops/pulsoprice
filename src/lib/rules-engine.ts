@@ -63,6 +63,14 @@ export async function generateActionsForRule(
     if (u.rol === "gerente") gerenteAuthId = u.auth_id;
   }
 
+  // Build mentora lookup: mentoras.id → usuarios.id (via usuario_id)
+  const { data: mentorasLookup } = await supabase
+    .from("mentoras").select("id, usuario_id").eq("activa", true);
+  const mentoraIdToUsuarioId: Record<string, string> = {};
+  for (const m of (mentorasLookup || [])) {
+    if (m.usuario_id) mentoraIdToUsuarioId[m.id] = m.usuario_id;
+  }
+
   let created = 0;
   for (const soc of socias) {
     if (!evaluateCondition(regla, soc)) continue;
@@ -80,8 +88,13 @@ export async function generateActionsForRule(
       asignadaA = idToAuth[soc.coordinador_id];
     } else if (regla.asignar_a_rol === "desarrolladora" && soc.desarrolladora_id && idToAuth[soc.desarrolladora_id]) {
       asignadaA = idToAuth[soc.desarrolladora_id];
-    } else if (regla.asignar_a_rol === "mentora" && soc.mentora_id && idToAuth[soc.mentora_id]) {
-      asignadaA = idToAuth[soc.mentora_id];
+    } else if (regla.asignar_a_rol === "mentora" && soc.mentora_id) {
+      const usuarioId = mentoraIdToUsuarioId[soc.mentora_id];
+      if (usuarioId && idToAuth[usuarioId]) {
+        asignadaA = idToAuth[usuarioId];
+      } else if (soc.coordinador_id && idToAuth[soc.coordinador_id]) {
+        asignadaA = idToAuth[soc.coordinador_id]; // fallback to coordinador
+      }
     } else if (regla.asignar_a_rol === "gerente") {
       asignadaA = gerenteAuthId;
     }

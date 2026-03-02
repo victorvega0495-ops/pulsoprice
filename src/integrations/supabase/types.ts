@@ -597,6 +597,7 @@ export type Database = {
           retos_count: number | null
           telefono: string
           updated_at: string
+          usuario_id: string | null
         }
         Insert: {
           activa?: boolean
@@ -609,6 +610,7 @@ export type Database = {
           retos_count?: number | null
           telefono: string
           updated_at?: string
+          usuario_id?: string | null
         }
         Update: {
           activa?: boolean
@@ -621,8 +623,17 @@ export type Database = {
           retos_count?: number | null
           telefono?: string
           updated_at?: string
+          usuario_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "mentoras_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       metas_diarias_reto: {
         Row: {

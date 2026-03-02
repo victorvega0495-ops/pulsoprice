@@ -40,7 +40,7 @@ function DefaultRedirect() {
     gerente: "/dashboard-operativo",
     coordinador: "/cola-trabajo",
     desarrolladora: "/cola-trabajo",
-    mentora: "/pendientes",
+    mentora: "/cola-trabajo",
   };
 
   return <Navigate to={redirectMap[profile.rol] || "/dashboard"} replace />;
