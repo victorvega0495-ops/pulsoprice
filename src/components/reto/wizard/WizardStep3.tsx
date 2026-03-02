@@ -30,6 +30,11 @@ export function WizardStep3({ form, setForm }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkRole, setBulkRole] = useState("");
   const [bulkUser, setBulkUser] = useState("");
+  const [excelResult, setExcelResult] = useState<{
+    processed: number;
+    counts: string[];
+    errors: string[];
+  } | null>(null);
 
   const { data: coordinadores = [] } = useQuery({
     queryKey: ["coordinadores-activos"],
@@ -91,8 +96,8 @@ export function WizardStep3({ form, setForm }: Props) {
     toast({ title: "Mentoras asignadas automáticamente" });
   };
 
-  // Excel upload for assignments
-  const handleExcelAssign = useCallback((field: "coordinador_id" | "desarrolladora_id" | "mentora_id", file: File) => {
+  // Unified Excel upload
+  const handleUnifiedExcel = useCallback((file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
@@ -101,41 +106,57 @@ export function WizardStep3({ form, setForm }: Props) {
         const rows: any[] = XLSX.utils.sheet_to_json(ws);
 
         const updated = [...form.socias];
-        let matched = 0;
-        let errors = 0;
+        const errors: string[] = [];
+        let processed = 0;
 
         for (const row of rows) {
           const idSocia = String(row.id_socia || "").trim();
-          const email = String(row.email_responsable || row.email || "").trim().toLowerCase();
-          if (!idSocia || !email) { errors++; continue; }
+          if (!idSocia) continue;
 
           const socia = updated.find(s => s.id_socia === idSocia && !s.error);
-          if (!socia) { errors++; continue; }
+          if (!socia) { errors.push(`${idSocia}: socia no encontrada`); continue; }
+          processed++;
 
-          let userId: string | undefined;
-          if (field === "mentora_id") {
-            const m = mentoras.find((m: any) => m.telefono === email || m.nombre.toLowerCase() === email);
-            userId = m?.id;
-          } else {
-            const users = field === "coordinador_id" ? coordinadores : desarrolladoras;
-            const u = users.find((u: any) => u.email.toLowerCase() === email);
-            userId = u?.id;
+          const coordEmail = String(row.coordinador || "").trim().toLowerCase();
+          if (coordEmail) {
+            const u = coordinadores.find((u: any) => u.email.toLowerCase() === coordEmail);
+            if (u) (socia as any).coordinador_id = u.id;
+            else errors.push(`${idSocia}: coordinador "${coordEmail}" no encontrado`);
           }
 
-          if (userId) {
-            (socia as any)[field] = userId;
-            matched++;
-          } else {
-            errors++;
+          const desaEmail = String(row.desarrolladora || "").trim().toLowerCase();
+          if (desaEmail) {
+            const u = desarrolladoras.find((u: any) => u.email.toLowerCase() === desaEmail);
+            if (u) (socia as any).desarrolladora_id = u.id;
+            else errors.push(`${idSocia}: desarrolladora "${desaEmail}" no encontrada`);
+          }
+
+          const mentNombre = String(row.mentora || "").trim().toLowerCase();
+          if (mentNombre) {
+            const m = mentoras.find((m: any) => m.nombre.toLowerCase() === mentNombre);
+            if (m) (socia as any).mentora_id = m.id;
+            else errors.push(`${idSocia}: mentora "${mentNombre}" no encontrada`);
           }
         }
 
         setForm({ ...form, socias: updated });
-        toast({
-          title: "Asignaciones cargadas",
-          description: `${matched} asignadas, ${errors} errores`,
-          variant: errors > 0 ? "destructive" : "default",
-        });
+
+        // Build counts
+        const counts: string[] = [];
+        const coordCounts: Record<string, number> = {};
+        const desaCounts: Record<string, number> = {};
+        const mentCounts: Record<string, number> = {};
+        for (const s of updated.filter(s => !s.error)) {
+          if (s.coordinador_id) { const u = coordinadores.find((u: any) => u.id === s.coordinador_id); if (u) coordCounts[u.nombre] = (coordCounts[u.nombre] || 0) + 1; }
+          if (s.desarrolladora_id) { const u = desarrolladoras.find((u: any) => u.id === s.desarrolladora_id); if (u) desaCounts[u.nombre] = (desaCounts[u.nombre] || 0) + 1; }
+          if (s.mentora_id) { const m = mentoras.find((m: any) => m.id === s.mentora_id); if (m) mentCounts[m.nombre] = (mentCounts[m.nombre] || 0) + 1; }
+        }
+        if (Object.keys(coordCounts).length) counts.push(`Coordinadores: ${Object.entries(coordCounts).map(([n, c]) => `${n} ${c}`).join(", ")}`);
+        if (Object.keys(desaCounts).length) counts.push(`Desarrolladoras: ${Object.entries(desaCounts).map(([n, c]) => `${n} ${c}`).join(", ")}`);
+        if (Object.keys(mentCounts).length) counts.push(`Mentoras: ${Object.entries(mentCounts).map(([n, c]) => `${n} ${c}`).join(", ")}`);
+
+        setExcelResult({ processed, counts, errors });
+        toast({ title: "Asignaciones cargadas", description: `${processed} socias procesadas, ${errors.length} errores` });
       } catch (err: any) {
         toast({ title: "Error al leer Excel", description: err.message, variant: "destructive" });
       }
@@ -143,18 +164,18 @@ export function WizardStep3({ form, setForm }: Props) {
     reader.readAsBinaryString(file);
   }, [form, setForm, coordinadores, desarrolladoras, mentoras]);
 
-  // Download template
-  const downloadTemplate = (field: string) => {
+  // Download unified template
+  const downloadUnifiedTemplate = () => {
     const rows = validSocias.map(s => ({
       id_socia: s.id_socia,
-      nombre: s.nombre,
-      tienda: s.tienda_visita,
-      email_responsable: "",
+      coordinador: "",
+      desarrolladora: "",
+      mentora: "",
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Asignaciones");
-    XLSX.writeFile(wb, `plantilla_${field}.xlsx`);
+    XLSX.writeFile(wb, `plantilla_asignaciones.xlsx`);
   };
 
   // Bulk assign selected
@@ -285,36 +306,49 @@ export function WizardStep3({ form, setForm }: Props) {
 
         {/* TAB: Excel */}
         <TabsContent value="excel" className="space-y-6 mt-4">
-          {(["coordinador_id", "desarrolladora_id", "mentora_id"] as const).map(field => {
-            const label = field === "coordinador_id" ? "Coordinadores" : field === "desarrolladora_id" ? "Desarrolladoras" : "Mentoras";
-            return (
-              <div key={field} className="space-y-3 rounded-lg border p-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold">{label}</h3>
-                  <Button variant="ghost" size="sm" onClick={() => downloadTemplate(field)}>
-                    <Download className="mr-2 h-4 w-4" /> Descargar plantilla
-                  </Button>
+          <div className="space-y-3 rounded-lg border p-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold">Cargar Excel de asignaciones</h3>
+              <Button variant="ghost" size="sm" onClick={downloadUnifiedTemplate}>
+                <Download className="mr-2 h-4 w-4" /> Descargar plantilla
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Excel con 4 columnas: <strong>id_socia</strong>, <strong>coordinador</strong> (email), <strong>desarrolladora</strong> (email), <strong>mentora</strong> (nombre). Deja vacía la celda si no quieres asignar.
+            </p>
+            <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed p-6 hover:bg-accent/5">
+              <Upload className="h-5 w-5 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Click para cargar Excel de asignaciones</span>
+              <input
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleUnifiedExcel(f);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+          </div>
+          {excelResult && (
+            <div className="space-y-2 rounded-lg border bg-card p-4">
+              <h4 className="text-sm font-semibold">Resultado de carga</h4>
+              <p className="text-sm">{excelResult.processed} socias procesadas</p>
+              {excelResult.counts.map((line, i) => (
+                <p key={i} className="text-sm text-muted-foreground">{line}</p>
+              ))}
+              {excelResult.errors.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  <p className="text-sm font-medium text-destructive">Errores ({excelResult.errors.length}):</p>
+                  {excelResult.errors.slice(0, 10).map((err, i) => (
+                    <p key={i} className="text-xs text-destructive">{err}</p>
+                  ))}
+                  {excelResult.errors.length > 10 && <p className="text-xs text-muted-foreground">...y {excelResult.errors.length - 10} más</p>}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Excel con columnas: id_socia, email_responsable. {field === "mentora_id" ? "Usa nombre o teléfono de la mentora." : "Usa email del usuario."}
-                </p>
-                <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed p-4 hover:bg-accent/5">
-                  <Upload className="h-5 w-5 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">Click para cargar Excel de {label.toLowerCase()}</span>
-                  <input
-                    type="file"
-                    accept=".xlsx,.xls,.csv"
-                    className="hidden"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) handleExcelAssign(field, f);
-                      e.target.value = "";
-                    }}
-                  />
-                </label>
-              </div>
-            );
-          })}
+              )}
+            </div>
+          )}
         </TabsContent>
 
         {/* TAB: Manual */}
