@@ -105,7 +105,7 @@ export default function ColaTrabajo() {
     queryFn: async () => {
       let query = supabase
         .from("acciones_operativas")
-        .select("*, socias_reto!inner(nombre, telefono, tienda_visita, venta_acumulada, meta_individual, dias_sin_compra, estado, id_socia), retos!inner(nombre, tipo_reto)")
+        .select("*, socias_reto!inner(nombre, telefono, tienda_visita, venta_acumulada, meta_individual, dias_sin_compra, estado, id_socia, baseline_mensual, pct_avance), retos!inner(nombre, tipo_reto)")
         .in("estado", ["pendiente", "pospuesta"])
         .order("created_at", { ascending: true });
 
@@ -451,62 +451,96 @@ export default function ColaTrabajo() {
           {filtered.map((accion: any) => {
             const socia = accion.socias_reto;
             const isUrgente = accion.prioridad === "urgente";
+            const isAlta = accion.prioridad === "alta";
             const origenKey = accion.origen?.toUpperCase?.() || accion.origen;
             const asignadoNombre = usuarios.find((u: any) => u.auth_id === accion.asignada_a || u.id === accion.asignada_a)?.nombre || "Sin asignar";
+            const diasSinCompra = Number(socia?.dias_sin_compra || 0);
+            const accionIcon = accion.tipo === "celebrar" ? "🎉" : accion.tipo === "diagnosticar" ? "🔍" : "📞";
+            const borderColor = isUrgente ? "border-l-red-500" : isAlta ? "border-l-orange-500" : "border-l-muted-foreground/30";
+
             return (
               <div
                 key={accion.id}
                 className={cn(
-                  "relative flex items-start gap-4 rounded-lg border bg-card p-4 transition-colors hover:bg-accent/5",
-                  isUrgente && "bg-red-500/5 border-red-500/20"
+                  "relative rounded-lg border border-l-4 bg-card p-4 transition-colors hover:bg-accent/5",
+                  borderColor,
+                  isUrgente && "bg-red-500/5"
                 )}
               >
-                <div className={cn("w-1 self-stretch rounded-full shrink-0", prioridadColors[accion.prioridad])} />
-                <div className="flex-1 min-w-0 space-y-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Badge variant="outline" className={cn("text-[10px] uppercase", accion.retos?.tipo_reto === "seguimiento" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : "bg-blue-500/20 text-blue-400 border-blue-500/30")}>
-                      {accion.retos?.nombre || "Reto"}
-                    </Badge>
-                    <Badge variant="outline" className={cn("text-[10px] uppercase", origenBadge[accion.origen] || origenBadge[origenKey] || origenBadge.MANUAL)}>
-                      {accion.origen}
-                    </Badge>
-                    <span className="text-sm font-semibold">{accion.titulo}</span>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    <button className="hover:underline text-foreground font-medium" onClick={(e) => { e.stopPropagation(); setFichaOpen(accion.socia_reto_id); }}>
-                      {socia?.nombre}
+                <div className="flex gap-4">
+                  {/* Main content */}
+                  <div className="flex-1 min-w-0 space-y-2">
+                    {/* LINE 1: Badges */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge variant="outline" className={cn("text-[10px] uppercase", accion.retos?.tipo_reto === "seguimiento" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : "bg-blue-500/20 text-blue-400 border-blue-500/30")}>
+                        {accion.retos?.nombre || "Reto"}
+                      </Badge>
+                      <Badge variant="outline" className={cn("text-[10px] uppercase", origenBadge[accion.origen] || origenBadge[origenKey] || origenBadge.MANUAL)}>
+                        {accion.origen}
+                      </Badge>
+                      {isUrgente && <Badge variant="destructive" className="text-[10px]">URGENTE</Badge>}
+                    </div>
+
+                    {/* LINE 2: Socia name — prominent */}
+                    <button
+                      className="text-left text-lg font-bold text-foreground hover:underline"
+                      onClick={() => setFichaOpen(accion.socia_reto_id)}
+                    >
+                      {socia?.nombre || "Socia"}
                     </button>
-                    {" · "}{socia?.tienda_visita || "Sin tienda"}
-                  </p>
-                  {accion.contexto && (
-                    <p className="text-xs text-muted-foreground/70 line-clamp-2">{accion.contexto}</p>
-                  )}
-                  <p className="text-[10px] text-muted-foreground/50">
-                    {isManager && <span className="text-muted-foreground/70 font-medium">→ {asignadoNombre} · </span>}
-                    {accion.retos?.nombre && <span className="text-muted-foreground/70">{accion.retos.nombre} · </span>}
-                    {formatDistanceToNow(new Date(accion.created_at), { addSuffix: true, locale: es })}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <Button size="icon" variant="ghost" className="h-8 w-8 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10" onClick={() => openModal("completar", accion)} title="Completar">
-                    <Check className="h-4 w-4" />
-                  </Button>
-                  <Button size="icon" variant="ghost" className="h-8 w-8 text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/10" onClick={() => openModal("posponer", accion)} title="Posponer">
-                    <Clock className="h-4 w-4" />
-                  </Button>
-                  <Button size="icon" variant="ghost" className="h-8 w-8 text-orange-400 hover:text-orange-300 hover:bg-orange-500/10" onClick={() => openModal("escalar", accion)} title="Escalar">
-                    <ArrowUpRight className="h-4 w-4" />
-                  </Button>
-                  {socia?.telefono && (
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10" asChild title="WhatsApp">
-                      <a href={`https://wa.me/${socia.telefono.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer">
-                        <MessageSquare className="h-4 w-4" />
-                      </a>
+
+                    {/* LINE 3: Context info */}
+                    <p className="text-sm text-muted-foreground">
+                      {socia?.tienda_visita || "Sin tienda"}
+                      {socia?.baseline_mensual != null && <> · Baseline ${Number(socia.baseline_mensual).toLocaleString()}</>}
+                      {socia?.pct_avance != null && <> · Avance {Number(socia.pct_avance).toFixed(0)}%</>}
+                      {diasSinCompra > 0 && (
+                        <> · <span className={cn(diasSinCompra >= 3 && "text-red-400 font-medium")}>Días s/compra: {diasSinCompra}</span></>
+                      )}
+                    </p>
+
+                    {/* LINE 4: The action — highlighted */}
+                    <div className="rounded-md bg-accent/30 border border-border/50 px-3 py-2">
+                      <p className="text-sm font-medium">
+                        <span className="mr-1.5">{accionIcon}</span>
+                        {accion.contexto || accion.titulo}
+                      </p>
+                      {accion.tactica && (
+                        <p className="text-xs text-muted-foreground mt-1">💡 Táctica: {accion.tactica}</p>
+                      )}
+                      {accion.contexto_ia && (
+                        <p className="text-xs text-muted-foreground/70 mt-1 italic">{accion.contexto_ia}</p>
+                      )}
+                    </div>
+
+                    {/* LINE 5: Assignment + time */}
+                    <p className="text-[11px] text-muted-foreground/60">
+                      → {asignadoNombre} · {formatDistanceToNow(new Date(accion.created_at), { addSuffix: true, locale: es })}
+                    </p>
+                  </div>
+
+                  {/* Action buttons — vertical */}
+                  <div className="flex flex-col items-center gap-1 shrink-0 pt-6">
+                    {socia?.telefono && (
+                      <Button size="icon" variant="outline" className="h-9 w-9 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300" asChild title="WhatsApp">
+                        <a href={`https://wa.me/${socia.telefono.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer">
+                          <MessageSquare className="h-4 w-4" />
+                        </a>
+                      </Button>
+                    )}
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10" onClick={() => openModal("completar", accion)} title="Completar">
+                      <Check className="h-4 w-4" />
                     </Button>
-                  )}
-                  <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => openModal("nota", accion)} title="Nota">
-                    <StickyNote className="h-4 w-4" />
-                  </Button>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/10" onClick={() => openModal("posponer", accion)} title="Posponer">
+                      <Clock className="h-4 w-4" />
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-orange-400 hover:text-orange-300 hover:bg-orange-500/10" onClick={() => openModal("escalar", accion)} title="Escalar">
+                      <ArrowUpRight className="h-4 w-4" />
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => openModal("nota", accion)} title="Nota">
+                      <StickyNote className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             );
