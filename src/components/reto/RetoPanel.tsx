@@ -175,13 +175,15 @@ export function RetoPanel({ reto, onRefresh }: Props) {
       if (a.fecha && b.fecha) return a.fecha.localeCompare(b.fecha);
       return a.dia_numero - b.dia_numero;
     })
-    .map((m: any) => {
+    .map((m: any, index: number, arr: any[]) => {
       const fecha = m.fecha ? format(parseISO(m.fecha), "d MMM", { locale: es }) : `D${m.dia_numero}`;
-      const isPast = m.fecha ? parseISO(m.fecha) <= today : false;
+      const prevMeta = index > 0 ? Number(arr[index - 1].meta_acumulada_valor || 0) : 0;
+      const metaDia = Number(m.meta_acumulada_valor || 0) - prevMeta;
+      const ventaDia = Number(m.venta_real || 0);
       return {
         dia: fecha,
-        meta: Number(m.meta_acumulada_valor),
-        real: isPast && Number(m.venta_real) > 0 ? Number(m.venta_real) : undefined,
+        meta: metaDia,
+        real: ventaDia > 0 ? ventaDia : undefined,
       };
     });
 
@@ -190,7 +192,7 @@ export function RetoPanel({ reto, onRefresh }: Props) {
     let ventaAcum = 0;
     const sorted = [...metasDiarias].sort((a: any, b: any) => a.dia_numero - b.dia_numero);
     return sorted
-      .filter((m: any) => !m.fecha || parseISO(m.fecha) <= today)
+      .filter((m: any) => !m.fecha || parseISO(m.fecha) <= today || Number(m.venta_real || 0) > 0)
       .map((m: any, _i, arr) => {
         const ventaDia = Number(m.venta_real || 0);
         ventaAcum += ventaDia;
