@@ -101,7 +101,8 @@ export default function ReglasMetodo() {
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [loadingPredefined, setLoadingPredefined] = useState(false);
-  const [confirmPredefined, setConfirmPredefined] = useState(false);
+  const [confirmPredefined, setConfirmPredefined] = useState<false | "add" | "replace">(false);
+  const [confirmMode, setConfirmMode] = useState<"ask" | "confirm">("ask");
   const [retroModal, setRetroModal] = useState<{ regla: any; count: number } | null>(null);
   const [generatingActions, setGeneratingActions] = useState(false);
 
@@ -295,14 +296,18 @@ export default function ReglasMetodo() {
     queryClient.invalidateQueries({ queryKey: ["reglas-metodo"] });
   };
 
-  const handleLoadPredefined = async () => {
+  const handleLoadPredefined = async (mode: "add" | "replace") => {
     if (!retoId) return;
     setLoadingPredefined(true);
     try {
-      const startOrden = reglas.length > 0 ? Math.max(...reglas.map((r: any) => r.orden)) + 1 : 1;
+      if (mode === "replace") {
+        await supabase.from("acciones_operativas").delete().eq("reto_id", retoId);
+        await supabase.from("reglas_metodo").delete().eq("reto_id", retoId);
+      }
+      const existingMax = mode === "replace" ? 0 : (reglas.length > 0 ? Math.max(...reglas.map((r: any) => r.orden)) : 0);
       const inserts = PREDEFINED_RULES.map((rule, i) => ({
         reto_id: retoId,
-        orden: startOrden + i,
+        orden: existingMax + i + 1,
         activa: true,
         campo2: null as string | null,
         operador2: null as string | null,
@@ -314,12 +319,13 @@ export default function ReglasMetodo() {
       }));
       await supabase.from("reglas_metodo").insert(inserts);
       queryClient.invalidateQueries({ queryKey: ["reglas-metodo"] });
-      toast({ title: "10 reglas del Método cargadas", description: "Puedes editarlas, borrar las que no necesites o agregar nuevas." });
+      toast({ title: "10 reglas del Método cargadas", description: "Puedes editarlas desde aquí." });
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
       setLoadingPredefined(false);
       setConfirmPredefined(false);
+      setConfirmMode("ask");
     }
   };
 
@@ -360,6 +366,12 @@ export default function ReglasMetodo() {
             <Switch checked={showInactive} onCheckedChange={setShowInactive} id="show-inactive" />
             <Label htmlFor="show-inactive" className="text-xs text-muted-foreground">Mostrar inactivas</Label>
           </div>
+          <Button variant="outline" onClick={() => {
+            if (reglas.length > 0) { setConfirmMode("ask"); } else { setConfirmMode("confirm"); }
+            setConfirmPredefined("add");
+          }} disabled={!retoId || loadingPredefined}>
+            <BookOpen className="mr-1.5 h-4 w-4" /> Cargar plantilla
+          </Button>
           <Button onClick={openNew} disabled={!retoId}>
             <Plus className="mr-1.5 h-4 w-4" /> Nueva Regla
           </Button>
@@ -450,31 +462,45 @@ export default function ReglasMetodo() {
         </div>
       )}
 
-      {/* Predefined rules */}
-      {retoId && (
-        <div className="flex justify-center">
-          <Button variant="outline" onClick={() => setConfirmPredefined(true)} disabled={loadingPredefined}>
-            <BookOpen className="mr-1.5 h-4 w-4" />
-            Cargar plantilla del Método
-          </Button>
-        </div>
-      )}
-
       {/* Confirm predefined */}
-      <AlertDialog open={confirmPredefined} onOpenChange={setConfirmPredefined}>
+      <AlertDialog open={!!confirmPredefined} onOpenChange={(o) => { if (!o) { setConfirmPredefined(false); setConfirmMode("ask"); } }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-             <AlertDialogTitle>¿Cargar 10 reglas base del Método?</AlertDialogTitle>
-             <AlertDialogDescription>
-               Se agregarán 10 reglas base del Método. Puedes editarlas después, borrar las que no necesites o agregar nuevas.
-            </AlertDialogDescription>
+            {reglas.length > 0 && confirmMode === "ask" ? (
+              <>
+                <AlertDialogTitle>Este reto ya tiene {reglas.length} reglas</AlertDialogTitle>
+                <AlertDialogDescription>
+                  ¿Agregar las 10 reglas de la plantilla o reemplazar todas las existentes?
+                </AlertDialogDescription>
+              </>
+            ) : (
+              <>
+                <AlertDialogTitle>¿Cargar 10 reglas base del Método?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Se agregarán 10 reglas base del Método. Puedes editarlas después.
+                </AlertDialogDescription>
+              </>
+            )}
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleLoadPredefined} disabled={loadingPredefined}>
-              {loadingPredefined && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-              Cargar 8 reglas
-            </AlertDialogAction>
+            {reglas.length > 0 && confirmMode === "ask" ? (
+              <>
+                <Button variant="outline" onClick={() => handleLoadPredefined("add")} disabled={loadingPredefined}>
+                  {loadingPredefined && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                  Agregar
+                </Button>
+                <Button variant="destructive" onClick={() => handleLoadPredefined("replace")} disabled={loadingPredefined}>
+                  {loadingPredefined && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                  Reemplazar todas
+                </Button>
+              </>
+            ) : (
+              <AlertDialogAction onClick={() => handleLoadPredefined("add")} disabled={loadingPredefined}>
+                {loadingPredefined && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                Cargar 10 reglas
+              </AlertDialogAction>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

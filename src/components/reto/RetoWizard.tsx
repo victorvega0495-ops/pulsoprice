@@ -36,7 +36,7 @@ export interface RetoFormData {
   reglas_reto_origen_id?: string;
 }
 
-const stepLabels = ["Datos básicos", "Socias", "Equipo", "Método", "Publicar"];
+const stepLabels = ["Datos básicos", "Socias", "Equipo", "Configuración de Metas", "Publicar"];
 
 interface Props {
   onClose: () => void;
